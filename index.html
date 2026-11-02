@@ -141,6 +141,18 @@
   .ptext{font-size:15px;margin-bottom:4px;white-space:pre-wrap}
   .pcard.done{opacity:.9}
   .pcard .reason{margin-top:8px}
+  .stars{display:flex;gap:4px}
+  .stars button{background:none;color:var(--line);font-size:30px;padding:0 2px;line-height:1}
+  .stars button.on{color:var(--acc)}
+  .st{color:var(--acc);font-size:12px;letter-spacing:1px}
+  .bcard{padding:14px}
+  .linkbtn{background:none;color:var(--acc);padding:6px 0 0;font-weight:500;font-size:13px}
+  .bar em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--txt);opacity:.7;border-radius:2px}
+  .bar{position:relative;overflow:visible}
+  .bar>i{overflow:hidden}
+  .today-read{margin-top:14px;background:var(--card2);border-radius:14px;padding:12px 14px;border-left:3px solid var(--acc2)}
+  .today-read.ahead{border-left-color:var(--line)}
+  .tr{font-size:19px;font-weight:700;margin:4px 0 2px}
   .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--acc2);color:#10251a;padding:10px 16px;border-radius:99px;font-weight:600;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;white-space:nowrap}
   .toast.on{opacity:1}
 </style>
@@ -559,19 +571,50 @@ setInterval(()=>{
 
 /* ============ LIVROS ============ */
 const year = () => new Date().getFullYear();
+let readView = 'livros';
+function setReadView(v){ readView = v; renderBooks(); }
+const stars = n => n ? '★'.repeat(n)+'☆'.repeat(5-n) : '';
+const daysSince = ts => Math.max(0, Math.floor((Date.now()-ts)/DAY));
+
+function bookForm(bk){
+  bk = bk || {};
+  return `<label>Título</label><input name="title" required maxlength="80" value="${esc(bk.title||'')}">
+    <label>Autor (opcional)</label><input name="author" maxlength="60" value="${esc(bk.author||'')}">
+    <div class="row" style="gap:10px;align-items:flex-end">
+      <div class="sp"><label>Total de páginas</label><input type="number" name="pages" min="1" max="10000" value="${bk.pages||''}" placeholder="Ex.: 320"></div>
+      <div class="sp"><label>Meta pág/dia (opcional)</label><input type="number" name="ppd" min="1" max="1000" value="${bk.ppd||''}" placeholder="Ex.: 10"></div>
+    </div>`;
+}
+function readBookForm(fd, bk){
+  bk.title = fd.get('title').trim(); bk.author = (fd.get('author')||'').trim();
+  const pg = parseInt(fd.get('pages'),10), ppd = parseInt(fd.get('ppd'),10);
+  bk.pages = pg>0 ? pg : null; bk.ppd = ppd>0 ? ppd : null;
+  if(bk.pages && bk.page > bk.pages) bk.page = bk.pages;
+}
 function newBook(){
-  dialog(`<h2>Adicionar livro</h2>
-    <label>Título</label><input name="title" required maxlength="80">
-    <label>Autor (opcional)</label><input name="author" maxlength="60">
+  dialog(`<h2>Adicionar livro</h2>${bookForm()}
     <label>Status</label>
     <select name="status" onchange="bookDateField(this.form)"><option value="lendo">Estou lendo</option><option value="lido">Já terminei</option><option value="quero">Quero ler</option></select>
     <div id="bookDateBox"><label id="bookDateLbl">Começou a ler em</label><input type="date" name="date" value="${todayKey()}" max="${todayKey()}"></div>`,
   fd=>{
     const st = fd.get('status');
     const dt = keyToDate(fd.get('date')||todayKey()).getTime();
-    D.books.unshift({id:uid(), title:fd.get('title').trim(), author:fd.get('author').trim(), status:st,
-      start: st==='quero' ? null : dt, end: st==='lido' ? dt : null});
-    toast(st==='lido'?'Mais um! 📖':'Livro adicionado');
+    const bk = {id:uid(), status:st, start: st==='quero' ? null : dt, end: st==='lido' ? dt : null, page:0};
+    readBookForm(fd, bk); if(st==='lido' && bk.pages) bk.page = bk.pages;
+    D.books.unshift(bk);
+    if(st==='lido') setTimeout(()=>finishBook(bk.id, true), 50); else toast('Livro adicionado');
+  });
+}
+function editBook(id){
+  const bk = D.books.find(x=>x.id===id);
+  dialog(`<h2>Editar livro</h2>${bookForm(bk)}
+    ${bk.status==='lido'?`<label>Nota</label>${starInput(bk.rating)}
+      <label>Frase marcante</label><textarea name="quote" rows="2" maxlength="300">${esc(bk.quote||'')}</textarea>
+      <label>O que achou</label><textarea name="review" rows="2" maxlength="500">${esc(bk.review||'')}</textarea>`:''}`,
+  fd=>{
+    readBookForm(fd, bk);
+    if(bk.status==='lido'){ bk.rating = Number(fd.get('rating'))||null; bk.quote = (fd.get('quote')||'').trim(); bk.review = (fd.get('review')||'').trim(); }
+    toast('Atualizado ✓');
   });
 }
 function bookDateField(f){
@@ -580,8 +623,44 @@ function bookDateField(f){
   box.style.display=''; if(!f.date.value) f.date.value = todayKey();
   $('#bookDateLbl').textContent = st==='lido' ? 'Terminou de ler em' : 'Começou a ler em';
 }
-function finishBook(id){ const b=D.books.find(x=>x.id===id); b.status='lido'; b.end=Date.now(); save(); render(); toast('Parabéns, livro concluído! 🎉'); }
-function startBook(id){ const b=D.books.find(x=>x.id===id); b.status='lendo'; b.start=Date.now(); save(); render(); }
+function starInput(v){
+  return `<div class="stars" data-v="${v||0}">${[1,2,3,4,5].map(n=>`<button type="button" class="${n<=(v||0)?'on':''}" onclick="const w=this.parentNode;w.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('on',i<${n}));w.nextElementSibling.value=${n}">★</button>`).join('')}</div><input type="hidden" name="rating" value="${v||''}">`;
+}
+function finishBook(id, already){
+  const bk = D.books.find(x=>x.id===id);
+  dialog(`<h2>${already?'Como foi a leitura?':'Terminou! 🎉'}</h2>
+    <p class="mut">${esc(bk.title)}</p>
+    ${already?'':`<label>Terminou em</label><input type="date" name="date" value="${todayKey()}" max="${todayKey()}">`}
+    <label>Sua nota</label>${starInput(0)}
+    <label>Frase marcante (opcional)</label><textarea name="quote" rows="2" maxlength="300" placeholder="Um trecho que ficou com você"></textarea>
+    <label>O que achou (opcional)</label><textarea name="review" rows="2" maxlength="500"></textarea>`,
+  fd=>{
+    if(!already){
+      const k = fd.get('date') || todayKey();
+      bk.status = 'lido'; bk.end = k===todayKey() ? Date.now() : keyToDate(k).getTime()+12*36e5;
+      if(bk.pages) bk.page = bk.pages;
+    }
+    bk.rating = Number(fd.get('rating'))||null; bk.quote = (fd.get('quote')||'').trim(); bk.review = (fd.get('review')||'').trim();
+    const n = D.books.filter(b=>b.status==='lido' && new Date(b.end).getFullYear()===year()).length, g = D.goals[year()];
+    if(!already) setTimeout(()=>celebrate('📚','Livro concluído!', g ? `${n} de ${g} livros na meta de ${year()}.` : `${n} ${n===1?'livro lido':'livros lidos'} em ${year()}.`), 50);
+    else toast('Mais um! 📖');
+  });
+}
+function updatePage(id){
+  const bk = D.books.find(x=>x.id===id);
+  dialog(`<h2>Em que página você está?</h2><p class="mut">${esc(bk.title)}</p>
+    <label>Página atual${bk.pages?' (de '+bk.pages+')':''}</label>
+    <input type="number" name="page" min="0" ${bk.pages?`max="${bk.pages}"`:''} value="${bk.page||''}" required>
+    ${bk.pages?'':`<label>Total de páginas do livro</label><input type="number" name="pages" min="1" placeholder="Ex.: 320">`}`,
+  fd=>{
+    if(!bk.pages){ const pg = parseInt(fd.get('pages'),10); if(pg>0) bk.pages = pg; }
+    let pgn = parseInt(fd.get('page'),10) || 0; if(bk.pages) pgn = Math.min(pgn, bk.pages);
+    bk.page = pgn;
+    if(bk.pages && pgn>=bk.pages){ setTimeout(()=>finishBook(bk.id), 50); return; }
+    toast(`Página ${pgn} ✓`);
+  });
+}
+function startBook(id){ const b=D.books.find(x=>x.id===id); b.status='lendo'; b.start=Date.now(); b.page=0; save(); render(); }
 function delBook(id){ confirmBox('Remover este livro?','Remover',()=>{ D.books=D.books.filter(b=>b.id!==id); }); }
 function setGoal(){
   const y = year();
@@ -589,7 +668,19 @@ function setGoal(){
     <input type="number" name="g" min="1" max="365" value="${D.goals[y]||12}" required>`,
   fd=>{ D.goals[y] = Number(fd.get('g')); });
 }
-function renderBooks(){
+function bookForecast(bk){
+  if(!bk.pages) return `<button class="linkbtn" onclick="updatePage('${bk.id}')">+ informar páginas para ver a previsão</button>`;
+  const pg = bk.page||0, left = bk.pages-pg, d = Math.max(1, daysSince(bk.start)+ (daysSince(bk.start)?0:1));
+  const pace = pg / Math.max(1, daysSince(bk.start)||1);
+  const lines = [];
+  if(pg>0) lines.push(`Seu ritmo: <b>${pace>=10?Math.round(pace):pace.toFixed(1).replace('.',',')} pág/dia</b> → termina ${pace>0?'em '+fmtDate(Date.now()+Math.ceil(left/pace)*DAY).replace(/ de \d{4}$/,''):'—'}`);
+  if(bk.ppd) lines.push(`Na meta de ${bk.ppd} pág/dia → termina em ${fmtDate(Date.now()+Math.ceil(left/bk.ppd)*DAY).replace(/ de \d{4}$/,'')}`);
+  if(!lines.length) lines.push('Atualize a página para ver a previsão');
+  return `<div class="bar g" style="margin-top:8px"><i style="width:${Math.min(100,pg/bk.pages*100)}%"></i></div>
+    <div class="mut" style="font-size:12px">pág. ${pg} de ${bk.pages} · ${Math.round(pg/bk.pages*100)}% · faltam ${left}</div>
+    ${lines.map(l=>`<div class="mut" style="font-size:12px;margin-top:2px">${l}</div>`).join('')}`;
+}
+function renderBookList(){
   const y = year(), goal = D.goals[y];
   const read = D.books.filter(b=>b.status==='lido');
   const thisYear = read.filter(b=>new Date(b.end).getFullYear()===y);
@@ -597,37 +688,144 @@ function renderBooks(){
   const bestYear = Object.entries(byYear).sort((a,b)=>b[1]-a[1])[0];
   const reading = D.books.filter(b=>b.status==='lendo');
   const want = D.books.filter(b=>b.status==='quero');
-  // ritmo esperado
   const now = new Date(), startY = new Date(y,0,1), endY = new Date(y+1,0,1);
   const expected = goal ? goal*(now-startY)/(endY-startY) : 0;
-  const diff = thisYear.length - expected;
-
-  $('#s-livros').innerHTML = `
+  const pagesYear = thisYear.reduce((a,b)=>a+(b.pages||0),0);
+  return `
   <div class="card">
     <div class="row"><div class="icon">🎯</div><div class="sp"><h2>Meta de ${y}</h2>
-      <div class="mut">${goal?`${goal} livros`:'Defina quantos livros quer ler'}</div></div>
+      <div class="mut">${goal?`${thisYear.length} de ${goal} livros`:'Defina quantos livros quer ler'}</div></div>
       <button class="sec2" onclick="setGoal()">${goal?'Editar':'Definir'}</button></div>
-    <div class="big">${thisYear.length}<small>${goal?'/ '+goal:'lidos'}</small></div>
     ${goal?`<div class="bar g"><i style="width:${Math.min(100,thisYear.length/goal*100)}%"></i></div>
-      <div class="mut">${thisYear.length>=goal?'Meta batida! 🏆':(diff>=0?`Você está adiantado ✅`:`Para manter o ritmo, deveria estar em ${Math.ceil(expected)} 📖`)}</div>`:''}
+      <div class="mut">${thisYear.length>=goal?'Meta batida! 🏆':(thisYear.length>=expected?`Você está em dia ✅`:`Para manter o ritmo, deveria estar em ${Math.ceil(expected)} 📖`)}</div>`:''}
     <div class="stats">
-      <div class="stat"><b>${read.length}</b><span>lidos no total</span></div>
+      <div class="stat"><b>${thisYear.length}</b><span>lidos em ${y}</span></div>
+      <div class="stat"><b>${pagesYear||'—'}</b><span>páginas em ${y}</span></div>
       <div class="stat"><b>${bestYear?bestYear[1]:'—'}</b><span>recorde${bestYear?' ('+bestYear[0]+')':''}</span></div>
-      <div class="stat"><b>${reading.length}</b><span>lendo agora</span></div>
     </div>
   </div>
-  ${reading.length?`<div class="card"><h3 style="margin-top:0">Lendo agora</h3><ul class="list">${reading.map(b=>`<li>
-    <span>📖</span><div class="sp"><b>${esc(b.title)}</b>${b.author?`<div class="mut">${esc(b.author)}</div>`:''}<div class="mut">há ${Math.floor((Date.now()-b.start)/864e5)} dias</div></div>
-    <button class="green" style="padding:8px 12px" onclick="finishBook('${b.id}')">Terminei</button>
-    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
-  ${read.length?`<div class="card"><h3 style="margin-top:0">Lidos</h3><ul class="list">${read.sort((a,b)=>b.end-a.end).map(b=>`<li>
-    <span>✅</span><div class="sp"><b>${esc(b.title)}</b><div class="mut">${b.author?esc(b.author)+' · ':''}${fmtDate(b.end)}</div></div>
-    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
-  ${want.length?`<div class="card"><h3 style="margin-top:0">Quero ler</h3><ul class="list">${want.map(b=>`<li>
-    <span>🔖</span><div class="sp"><b>${esc(b.title)}</b>${b.author?`<div class="mut">${esc(b.author)}</div>`:''}</div>
-    <button class="sec2" style="padding:8px 12px" onclick="startBook('${b.id}')">Começar</button>
-    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
+  ${reading.length?`<h3>Lendo agora</h3>${reading.map(bk=>`<div class="card bcard">
+    <div class="row"><span style="font-size:22px">📖</span><div class="sp" style="min-width:0"><b>${esc(bk.title)}</b>
+      <div class="mut" style="font-size:12px">${bk.author?esc(bk.author)+' · ':''}há ${dayWord(daysSince(bk.start))}</div></div>
+      <button class="ghost" onclick="editBook('${bk.id}')">✎</button></div>
+    ${bookForecast(bk)}
+    <div class="btns"><button class="sec2" onclick="updatePage('${bk.id}')">Atualizar página</button><button class="green" onclick="finishBook('${bk.id}')">Terminei</button></div>
+  </div>`).join('')}`:''}
+  ${read.length?`<h3>Lidos</h3><div class="card"><ul class="list">${read.sort((a,b)=>b.end-a.end).map(bk=>`<li style="align-items:flex-start">
+    <span>✅</span><div class="sp"><b>${esc(bk.title)}</b> ${bk.rating?`<span class="st">${stars(bk.rating)}</span>`:''}
+      <div class="mut" style="font-size:12px">${bk.author?esc(bk.author)+' · ':''}${fmtDate(bk.end)}${bk.pages?' · '+bk.pages+' pág.':''}</div>
+      ${bk.quote?`<div class="reason">“${esc(bk.quote)}”</div>`:''}
+      ${bk.review?`<div class="mut" style="font-size:12.5px;margin-top:6px">${esc(bk.review)}</div>`:''}</div>
+    <button class="ghost" onclick="editBook('${bk.id}')">✎</button><button class="ghost" onclick="delBook('${bk.id}')">✕</button></li>`).join('')}</ul></div>`:''}
+  ${want.length?`<h3>Quero ler</h3><div class="card"><ul class="list">${want.map(bk=>`<li>
+    <span>🔖</span><div class="sp"><b>${esc(bk.title)}</b>${bk.author?`<div class="mut">${esc(bk.author)}</div>`:''}</div>
+    <button class="sec2" style="padding:8px 12px" onclick="startBook('${bk.id}')">Começar</button>
+    <button class="ghost" onclick="delBook('${bk.id}')">✕</button></li>`).join('')}</ul></div>`:''}
   ${!D.books.length?`<div class="card empty"><div>📚</div>Toque em <b>+</b> para adicionar um livro.</div>`:''}`;
+}
+
+/* ---- plano de leitura bíblica ---- */
+const BIBLE = [['Gênesis',50],['Êxodo',40],['Levítico',27],['Números',36],['Deuteronômio',34],['Josué',24],['Juízes',21],['Rute',4],['1 Samuel',31],['2 Samuel',24],['1 Reis',22],['2 Reis',25],['1 Crônicas',29],['2 Crônicas',36],['Esdras',10],['Neemias',13],['Ester',10],['Jó',42],['Salmos',150],['Provérbios',31],['Eclesiastes',12],['Cânticos',8],['Isaías',66],['Jeremias',52],['Lamentações',5],['Ezequiel',48],['Daniel',12],['Oséias',14],['Joel',3],['Amós',9],['Obadias',1],['Jonas',4],['Miquéias',7],['Naum',3],['Habacuque',3],['Sofonias',3],['Ageu',2],['Zacarias',14],['Malaquias',4],
+  ['Mateus',28],['Marcos',16],['Lucas',24],['João',21],['Atos',28],['Romanos',16],['1 Coríntios',16],['2 Coríntios',13],['Gálatas',6],['Efésios',6],['Filipenses',4],['Colossenses',4],['1 Tessalonicenses',5],['2 Tessalonicenses',3],['1 Timóteo',6],['2 Timóteo',4],['Tito',3],['Filemom',1],['Hebreus',13],['Tiago',5],['1 Pedro',5],['2 Pedro',3],['1 João',5],['2 João',1],['3 João',1],['Judas',1],['Apocalipse',22]];
+const CHAPTERS = BIBLE.flatMap(([b,n],bi)=>Array.from({length:n},(_,i)=>({b, c:i+1, nt: bi>=39})));
+const PLANS = { all:{name:'Bíblia completa', f:()=>true}, nt:{name:'Novo Testamento', f:c=>c.nt}, ot:{name:'Antigo Testamento', f:c=>!c.nt}, sp:{name:'Salmos e Provérbios', f:c=>c.b==='Salmos'||c.b==='Provérbios'} };
+const planChapters = pl => CHAPTERS.filter(PLANS[pl].f);
+function fmtRange(list){
+  const groups = [];
+  list.forEach(c=>{ const g = groups[groups.length-1]; if(g && g.b===c.b && g.to===c.c-1) g.to = c.c; else groups.push({b:c.b, from:c.c, to:c.c}); });
+  return groups.map(g=>`${g.b} ${g.from}${g.to>g.from?'–'+g.to:''}`).join('; ');
+}
+function biblePlanInfo(){
+  const bp = D.bible; if(!bp) return null;
+  const ch = planChapters(bp.plan), total = ch.length;
+  const di = Math.max(0, Math.round((keyToDate(todayKey()) - keyToDate(bp.start))/DAY));
+  const target = Math.min(total, Math.floor((di+1)*total/bp.days));        // até onde deveria estar ao fim de hoje
+  const prevTarget = Math.min(total, Math.floor(di*total/bp.days));         // ao fim de ontem
+  const done = Math.min(bp.done, total);
+  let from = done, to = target;
+  if(done >= target){ to = Math.min(total, done + Math.max(1, target-prevTarget)); }  // adiantar: próximo bloco
+  return {ch, total, di, target, prevTarget, done, from, to, ahead: done >= target, behind: Math.max(0, prevTarget - done)};
+}
+function setupBible(){
+  const bp = D.bible || {};
+  dialog(`<h2>Plano de leitura bíblica</h2>
+    <label>O que ler</label>
+    <select name="plan">${Object.entries(PLANS).map(([k,v])=>`<option value="${k}" ${bp.plan===k?'selected':''}>${v.name} (${planChapters(k).length} capítulos)</option>`).join('')}</select>
+    <label>Em quanto tempo</label>
+    <select name="days">${[[30,'1 mês'],[90,'3 meses'],[180,'6 meses'],[365,'1 ano'],[730,'2 anos']].map(([d,t])=>`<option value="${d}" ${ (bp.days||365)===d?'selected':''}>${t}</option>`).join('')}</select>
+    <label>Começa em</label><input type="date" name="start" value="${bp.start||todayKey()}">
+    ${bp.plan?'<p class="mut">Mudar o plano mantém os capítulos que você já leu, se for o mesmo tipo de plano.</p>':''}`,
+  fd=>{
+    const plan = fd.get('plan');
+    D.bible = {plan, days:Number(fd.get('days')), start: fd.get('start')||todayKey(), done: bp.plan===plan ? (bp.done||0) : 0, log: bp.log||{}};
+    toast('Plano criado 📖');
+  });
+}
+function bibleRead(){
+  const i = biblePlanInfo(); if(!i) return;
+  D.bible.prevDone = D.bible.done; D.bible.done = i.to;
+  D.bible.log = D.bible.log || {}; D.bible.log[todayKey()] = (D.bible.log[todayKey()]||0) + (i.to - i.from);
+  save(); render();
+  if(i.to >= i.total) celebrate('🏆', 'Plano concluído!', `Você leu ${PLANS[D.bible.plan].name.toLowerCase()} — ${i.total} capítulos. Glória a Deus!`);
+  else toast(`📖 ${i.to - i.from} ${i.to-i.from===1?'capítulo':'capítulos'} lidos`);
+}
+function bibleUndo(){
+  if(D.bible.prevDone==null) return;
+  const diff = D.bible.done - D.bible.prevDone;
+  D.bible.done = D.bible.prevDone; D.bible.prevDone = null;
+  const t = todayKey(); if(D.bible.log?.[t]){ D.bible.log[t] -= diff; if(D.bible.log[t]<=0) delete D.bible.log[t]; }
+  save(); render(); toast('Desfeito');
+}
+function bibleAdjust(){
+  const i = biblePlanInfo(), books = [...new Set(i.ch.map(c=>c.b))];
+  const cur = i.ch[Math.max(0,i.done-1)] || i.ch[0];
+  dialog(`<h2>Ajustar onde estou</h2>
+    <p class="mut">Informe o último capítulo que você já leu.</p>
+    <label>Livro</label><select name="b">${books.map(b=>`<option ${b===cur.b?'selected':''}>${b}</option>`).join('')}</select>
+    <label>Capítulo</label><input type="number" name="c" min="0" value="${i.done?cur.c:0}">
+    <p class="mut">Use capítulo 0 para recomeçar do início desse livro.</p>`,
+  fd=>{
+    const b = fd.get('b'), c = Number(fd.get('c'))||0;
+    const idx = i.ch.findIndex(x=>x.b===b);
+    const n = i.ch.filter(x=>x.b===b).length;
+    D.bible.done = idx + Math.min(c, n); D.bible.prevDone = null;
+    toast('Progresso ajustado ✓');
+  });
+}
+function delBible(){ confirmBox('Apagar o plano de leitura bíblica?','Apagar',()=>{ D.bible = null; }); }
+function renderBible(){
+  const i = biblePlanInfo();
+  if(!i) return `<div class="card empty"><div>📖</div>Crie um plano para ler a Bíblia.<br>O app mostra a leitura de cada dia e acompanha seu progresso.<br><br><button onclick="setupBible()">Criar plano</button></div>`;
+  const bp = D.bible, pct = i.done/i.total*100, exp = i.prevTarget/i.total*100;
+  const st = streaks(Object.keys(bp.log||{}).filter(k=>bp.log[k]>0));
+  const endDate = fmtDate(keyToDate(addDays(bp.start, bp.days-1)).getTime());
+  const finished = i.done >= i.total;
+  const status = finished ? '🏆 Plano concluído!' : i.behind ? `⚠️ ${i.behind} ${i.behind===1?'capítulo':'capítulos'} atrasado — a leitura de hoje já inclui a recuperação` : i.ahead ? '✅ Leitura de hoje feita! Quer adiantar?' : '📅 Em dia';
+  return `<div class="card">
+    <div class="row"><div class="icon">📖</div><div class="sp"><h2>${PLANS[bp.plan].name}</h2>
+      <div class="mut">dia ${Math.min(i.di+1,bp.days)} de ${bp.days} · termina ${endDate}</div></div>
+      <div class="hnum"><b>${Math.floor(pct)}<small style="font-size:15px">%</small></b><span>${i.done}/${i.total} cap.</span></div></div>
+    <div class="bar g" style="position:relative;margin-top:14px"><i style="width:${pct}%"></i><em style="left:${exp}%"></em></div>
+    <div class="mut" style="font-size:12px">a marca mostra onde você deveria estar</div>
+    ${finished?'':`<div class="today-read ${i.ahead?'ahead':''}">
+      <div class="lbl" style="margin-top:0">${i.ahead?'Próxima leitura':'Leitura de hoje'}</div>
+      <div class="tr">${fmtRange(i.ch.slice(i.from, i.to))}</div>
+      <div class="mut" style="font-size:12px">${i.to-i.from} ${i.to-i.from===1?'capítulo':'capítulos'}</div>
+    </div>
+    <div class="mut" style="margin-top:8px;font-size:13px">${status}</div>
+    <button class="full ${i.ahead?'sec2':'green'}" onclick="bibleRead()">${i.ahead?'Li a próxima também ✓':'Li a leitura de hoje ✓'}</button>`}
+    <div class="stats">
+      <div class="stat"><b>${st.cur}</b><span>dias seguidos</span></div>
+      <div class="stat"><b>${st.best}</b><span>recorde</span></div>
+      <div class="stat"><b>${Object.keys(bp.log||{}).length}</b><span>dias lendo</span></div>
+    </div>
+    <div style="text-align:right;margin-top:8px">${bp.prevDone!=null?`<button class="ghost" onclick="bibleUndo()">↶ Desfazer</button>`:''}<button class="ghost" onclick="bibleAdjust()">Ajustar onde estou</button><button class="ghost" onclick="setupBible()">✎ Plano</button><button class="ghost" onclick="delBible()">✕</button></div>
+  </div>`;
+}
+function renderBooks(){
+  const seg = `<div class="seg"><button class="${readView==='livros'?'on':''}" onclick="setReadView('livros')">📚 Livros</button><button class="${readView==='biblia'?'on':''}" onclick="setReadView('biblia')">📖 Bíblia</button></div>`;
+  $('#s-livros').innerHTML = seg + (readView==='biblia' ? renderBible() : renderBookList());
+  $('#fab').style.display = readView==='biblia' ? 'none' : '';
 }
 
 /* ============ SEQUÊNCIAS (hábitos) ============ */
