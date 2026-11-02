@@ -215,6 +215,40 @@ function breakFast(id){
     toast(len>best && f.history.length>1 ? `🏆 Novo recorde: ${dur(len)}!` : `Registrado: ${dur(len)}`);
   });
 }
+function editFast(id){
+  const f = D.fasts.find(x=>x.id===id);
+  dialog(`<h2>Editar jejum</h2>
+    <label>Nome</label><input name="name" required maxlength="40" value="${esc(f.name)}">
+    <label>Ícone</label><input name="icon" maxlength="4" value="${esc(f.icon||'⏳')}">
+    ${f.startedAt?`<label>Começou em</label><input type="datetime-local" name="start" required value="${toLocalInput(f.startedAt)}" max="${toLocalInput(Date.now())}">`:''}`,
+  fd=>{
+    if(f.startedAt){
+      const st = new Date(fd.get('start')).getTime();
+      if(!st || st>Date.now()){ toast('Data de início inválida'); return false; }
+      const lastEnd = f.history.reduce((m,h)=>Math.max(m,h.end),0);
+      if(st < lastEnd){ toast('O início não pode ser antes da última quebra'); return false; }
+      f.startedAt = st;
+    }
+    f.name = fd.get('name').trim(); f.icon = fd.get('icon').trim() || '⏳';
+    toast('Jejum atualizado ✓');
+  });
+}
+function editFastHist(id,i){
+  const f = D.fasts.find(x=>x.id===id), h = f.history[i];
+  dialog(`<h2>Editar registro</h2>
+    <label>Começou em</label><input type="datetime-local" name="start" required value="${toLocalInput(h.start)}">
+    <label>Quebrou em</label><input type="datetime-local" name="end" required value="${toLocalInput(h.end)}">
+    <label>Observação</label><input name="note" maxlength="80" value="${esc(h.note||'')}">`,
+  fd=>{
+    const st = new Date(fd.get('start')).getTime(), en = new Date(fd.get('end')).getTime();
+    if(!st || !en || en<=st){ toast('A quebra precisa ser depois do início'); return false; }
+    if(en>Date.now()){ toast('A quebra não pode ser no futuro'); return false; }
+    if(f.startedAt && en>f.startedAt){ toast('A quebra não pode ser depois do jejum atual começar'); return false; }
+    Object.assign(h,{start:st,end:en,note:fd.get('note')||''});
+    f.history.sort((a,b)=>b.end-a.end);
+    toast('Registro atualizado ✓');
+  });
+}
 function delFast(id){ confirmBox('Excluir este jejum e todo o histórico?','Excluir',()=>{ D.fasts=D.fasts.filter(f=>f.id!==id); }); }
 function delFastHist(id,i){ confirmBox('Apagar este registro?','Apagar',()=>{ D.fasts.find(f=>f.id===id).history.splice(i,1); }); }
 
@@ -250,8 +284,8 @@ function renderFasts(){
       ${total?`<h3>Histórico</h3><ul class="list">${f.history.slice(0,10).map((h,i)=>`<li>
         <span>${h.end-h.start===best?'🏆':'•'}</span>
         <div class="sp"><b>${dur(h.end-h.start)}</b> <span class="mut">${fmtDate(h.start)} → ${fmtDate(h.end)}</span>${h.note?`<div class="mut">${esc(h.note)}</div>`:''}</div>
-        <button class="ghost" onclick="delFastHist('${f.id}',${i})">✕</button></li>`).join('')}</ul>`:''}
-      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="delFast('${f.id}')">Excluir jejum</button></div>
+        <button class="ghost" onclick="editFastHist('${f.id}',${i})">✎</button><button class="ghost" onclick="delFastHist('${f.id}',${i})">✕</button></li>`).join('')}</ul>`:''}
+      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="editFast('${f.id}')">✎ Editar</button><button class="ghost" onclick="delFast('${f.id}')">Excluir jejum</button></div>
     </div>`;
   }).join('');
 }
