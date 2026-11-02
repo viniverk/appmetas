@@ -70,6 +70,19 @@
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .chips button{padding:7px 12px;font-size:13px;background:var(--card2);color:var(--txt);font-weight:500}
   .icon{font-size:24px;width:40px;height:40px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;flex:none}
+  .reason{margin:12px 0 0;padding:10px 12px;border-left:3px solid var(--acc);background:var(--card2);border-radius:0 10px 10px 0;font-style:italic;font-size:14px;color:#e8dccd}
+  .lbl{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.7px;margin-top:12px}
+  .lbl+.bar{margin-top:5px}
+  .ms{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .ms span{font-size:12px;padding:4px 9px;border-radius:99px;background:var(--card2);color:var(--mut)}
+  .ms span.ok{background:#1e3324;color:var(--acc2);font-weight:600}
+  .ms span.nx{border:1px dashed var(--acc);color:var(--acc)}
+  .party{position:fixed;inset:0;background:#000b;z-index:20;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .party i{position:absolute;top:-40px;font-style:normal;font-size:24px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+  .partybox{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px;width:min(88vw,360px);text-align:center;animation:pop .35s ease-out;position:relative}
+  .partybox h2{font-size:21px;margin:6px 0}
+  @keyframes pop{from{transform:scale(.7);opacity:0}}
   .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--acc2);color:#10251a;padding:10px 16px;border-radius:99px;font-weight:600;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;white-space:nowrap}
   .toast.on{opacity:1}
 </style>
@@ -181,6 +194,33 @@ function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('on'
 
 /* ============ JEJUNS ============ */
 const FAST_IDEAS = ['🍬 Doce','🥤 Refrigerante','📱 Redes sociais','🍔 Fast food','☕ Café','🍺 Álcool','🎮 Jogos'];
+const MS = [1,3,7,14,21,30,40,60,90,120,180,365];   // marcos em dias
+const DAY = 864e5;
+const fastBest = f => f.history.reduce((m,h)=>Math.max(m,h.end-h.start),0);
+const curMs = ms => MS.filter(m=>ms>=m*DAY).pop() || 0;
+const nextMs = ms => MS.find(m=>ms<m*DAY) || null;
+const dayWord = n => n===1 ? '1 dia' : n+' dias';
+
+function fastFormHtml(f){
+  f = f || {};
+  return `
+    <label>Motivo do jejum (opcional)</label>
+    <textarea name="reason" rows="2" maxlength="200" placeholder="Por que ou por quem você está jejuando?">${esc(f.reason||'')}</textarea>
+    <label>Prazo em dias (deixe vazio para ir até quebrar)</label>
+    <input type="number" name="target" min="1" max="1000" value="${f.targetDays||''}" placeholder="Sem prazo">
+    <div class="chips">${[7,21,30,40,90].map(n=>`<button type="button" onclick="this.form.target.value=${n}">${n} dias</button>`).join('')}<button type="button" onclick="this.form.target.value=''">Sem prazo</button></div>`;
+}
+function readFastForm(fd, f){
+  f.reason = (fd.get('reason')||'').trim();
+  const t = parseInt(fd.get('target'),10);
+  f.targetDays = t>0 ? t : null;
+}
+function resetRunFlags(f){ f.msSeen = 0; f.targetSeen = false; }
+function syncRunFlags(f){   // marca como já celebrado o que já foi atingido (sem festa)
+  const cur = f.startedAt ? Date.now()-f.startedAt : 0;
+  f.msSeen = curMs(cur); f.targetSeen = !!(f.targetDays && cur >= f.targetDays*DAY);
+}
+
 function newFast(){
   dialog(`<h2>Novo jejum</h2>
     <label>Do que você vai jejuar?</label>
@@ -188,15 +228,21 @@ function newFast(){
     <div class="chips">${FAST_IDEAS.map(i=>`<button type="button" onclick="this.form.name.value='${i.split(' ').slice(1).join(' ')}';this.form.icon.value='${i.split(' ')[0]}'">${i}</button>`).join('')}</div>
     <input type="hidden" name="icon" value="⏳">
     <label>Começou quando?</label>
-    <input type="datetime-local" name="start" value="${toLocalInput(Date.now())}">`,
+    <input type="datetime-local" name="start" value="${toLocalInput(Date.now())}">
+    ${fastFormHtml()}`,
   fd=>{
     const start = new Date(fd.get('start')).getTime() || Date.now();
-    D.fasts.unshift({id:uid(), name:fd.get('name').trim(), icon:fd.get('icon')||'⏳', startedAt: Math.min(start,Date.now()), history:[]});
+    const f = {id:uid(), name:fd.get('name').trim(), icon:fd.get('icon')||'⏳', startedAt: Math.min(start,Date.now()), history:[]};
+    readFastForm(fd, f); syncRunFlags(f);
+    D.fasts.unshift(f);
     toast('Jejum iniciado. Força! 💪');
   });
 }
-const fastBest = f => f.history.reduce((m,h)=>Math.max(m,h.end-h.start),0);
-function startFast(id){ const f=D.fasts.find(x=>x.id===id); f.startedAt=Date.now(); save(); render(); toast('Contagem reiniciada 💪'); }
+function startFast(id){
+  const f = D.fasts.find(x=>x.id===id);
+  f.startedAt = Date.now(); resetRunFlags(f);
+  save(); render(); toast('Contagem reiniciada 💪');
+}
 function breakFast(id){
   const f = D.fasts.find(x=>x.id===id);
   dialog(`<h2>Quebrou o jejum de ${esc(f.name)}?</h2>
@@ -212,7 +258,17 @@ function breakFast(id){
     const best = fastBest(f), len = end - f.startedAt;
     f.history.unshift({start:f.startedAt, end, note:fd.get('note')||''});
     f.startedAt = fd.get('restart') ? Date.now() : null;
+    resetRunFlags(f);
     toast(len>best && f.history.length>1 ? `🏆 Novo recorde: ${dur(len)}!` : `Registrado: ${dur(len)}`);
+  });
+}
+function completeFast(id){
+  const f = D.fasts.find(x=>x.id===id);
+  confirmBox(`Encerrar o jejum de ${esc(f.name)} com a meta de ${dayWord(f.targetDays)} cumprida?`, 'Encerrar ✅', ()=>{
+    const end = Date.now();
+    f.history.unshift({start:f.startedAt, end, note:`Meta de ${dayWord(f.targetDays)} cumprida`, done:true});
+    f.startedAt = null; resetRunFlags(f);
+    celebrate('✅', 'Jejum concluído!', `${dur(end - f.history[0].start)} sem ${f.name}. Glória a Deus!`);
   });
 }
 function editFast(id){
@@ -220,7 +276,8 @@ function editFast(id){
   dialog(`<h2>Editar jejum</h2>
     <label>Nome</label><input name="name" required maxlength="40" value="${esc(f.name)}">
     <label>Ícone</label><input name="icon" maxlength="4" value="${esc(f.icon||'⏳')}">
-    ${f.startedAt?`<label>Começou em</label><input type="datetime-local" name="start" required value="${toLocalInput(f.startedAt)}" max="${toLocalInput(Date.now())}">`:''}`,
+    ${f.startedAt?`<label>Começou em</label><input type="datetime-local" name="start" required value="${toLocalInput(f.startedAt)}" max="${toLocalInput(Date.now())}">`:''}
+    ${fastFormHtml(f)}`,
   fd=>{
     if(f.startedAt){
       const st = new Date(fd.get('start')).getTime();
@@ -230,6 +287,7 @@ function editFast(id){
       f.startedAt = st;
     }
     f.name = fd.get('name').trim(); f.icon = fd.get('icon').trim() || '⏳';
+    readFastForm(fd, f); syncRunFlags(f);
     toast('Jejum atualizado ✓');
   });
 }
@@ -237,13 +295,13 @@ function editFastHist(id,i){
   const f = D.fasts.find(x=>x.id===id), h = f.history[i];
   dialog(`<h2>Editar registro</h2>
     <label>Começou em</label><input type="datetime-local" name="start" required value="${toLocalInput(h.start)}">
-    <label>Quebrou em</label><input type="datetime-local" name="end" required value="${toLocalInput(h.end)}">
+    <label>Terminou em</label><input type="datetime-local" name="end" required value="${toLocalInput(h.end)}">
     <label>Observação</label><input name="note" maxlength="80" value="${esc(h.note||'')}">`,
   fd=>{
     const st = new Date(fd.get('start')).getTime(), en = new Date(fd.get('end')).getTime();
-    if(!st || !en || en<=st){ toast('A quebra precisa ser depois do início'); return false; }
-    if(en>Date.now()){ toast('A quebra não pode ser no futuro'); return false; }
-    if(f.startedAt && en>f.startedAt){ toast('A quebra não pode ser depois do jejum atual começar'); return false; }
+    if(!st || !en || en<=st){ toast('O fim precisa ser depois do início'); return false; }
+    if(en>Date.now()){ toast('O fim não pode ser no futuro'); return false; }
+    if(f.startedAt && en>f.startedAt){ toast('O fim não pode ser depois do jejum atual começar'); return false; }
     Object.assign(h,{start:st,end:en,note:fd.get('note')||''});
     f.history.sort((a,b)=>b.end-a.end);
     toast('Registro atualizado ✓');
@@ -252,6 +310,79 @@ function editFastHist(id,i){
 function delFast(id){ confirmBox('Excluir este jejum e todo o histórico?','Excluir',()=>{ D.fasts=D.fasts.filter(f=>f.id!==id); }); }
 function delFastHist(id,i){ confirmBox('Apagar este registro?','Apagar',()=>{ D.fasts.find(f=>f.id===id).history.splice(i,1); }); }
 
+/* ---- comemoração ---- */
+function celebrate(emoji, title, text){
+  const el = document.createElement('div');
+  el.className = 'party';
+  const bits = ['🎉','✨','🎊','⭐','🙌','💛'];
+  el.innerHTML = Array.from({length:28},()=>`<i style="left:${Math.random()*100}%;animation-delay:${Math.random()*.8}s;animation-duration:${2+Math.random()*1.5}s">${bits[Math.floor(Math.random()*bits.length)]}</i>`).join('')
+    + `<div class="partybox"><div style="font-size:56px">${emoji}</div><h2>${esc(title)}</h2><p class="mut">${esc(text)}</p><button class="full">Amém! 🙏</button></div>`;
+  el.onclick = () => el.remove();
+  document.body.appendChild(el);
+  try{ navigator.vibrate && navigator.vibrate([80,60,120]); }catch(e){}
+}
+function checkMilestones(){
+  if($('#dlg').open || document.querySelector('.party')) return;
+  for(const f of D.fasts){
+    if(!f.startedAt) continue;
+    const cur = Date.now()-f.startedAt;
+    if(f.targetDays && !f.targetSeen && cur >= f.targetDays*DAY){
+      f.targetSeen = true; f.msSeen = Math.max(f.msSeen||0, curMs(cur)); save(); render();
+      celebrate('🏁', `Meta de ${dayWord(f.targetDays)} cumprida!`, `Você completou o jejum de ${f.name}. Pode encerrar ou continuar firme.`);
+      return;
+    }
+    const m = curMs(cur);
+    if(m > (f.msSeen||0)){
+      f.msSeen = m; save(); render();
+      const extra = m===21 ? 'O mesmo tempo do jejum de Daniel!' : m===40 ? 'Quarenta dias, como Jesus no deserto!' : 'Continue firme!';
+      celebrate('🎉', `${dayWord(m)} sem ${f.name}!`, extra);
+      return;
+    }
+  }
+}
+
+/* ---- gráfico de evolução ---- */
+function shortDur(ms){ return ms>=DAY ? (ms/DAY).toFixed(ms<10*DAY?1:0).replace('.',',')+'d' : Math.max(1,Math.round(ms/36e5))+'h'; }
+function fastChart(f){
+  const items = f.history.slice(0,11).reverse().map(h=>({v:h.end-h.start, done:h.done}));
+  if(f.startedAt) items.push({v:Date.now()-f.startedAt, now:true});
+  if(items.length < 2) return '';
+  const best = fastBest(f), max = Math.max(...items.map(i=>i.v), best) || 1;
+  const W = 300, H = 120, top = 16, base = 104, n = items.length, slot = W/n, bw = Math.min(28, slot*.62);
+  const y = v => base - v/max*(base-top);
+  const bars = items.map((it,i)=>{
+    const x = i*slot + (slot-bw)/2, h = Math.max(2, base - y(it.v));
+    const col = it.now ? 'var(--acc)' : (it.v===best ? 'var(--acc2)' : (it.done ? '#5f8a69' : '#5a4d42'));
+    return `<rect x="${x}" y="${base-h}" width="${bw}" height="${h}" rx="4" fill="${col}"/>`
+      + (n<=8 || it.now || it.v===best ? `<text x="${x+bw/2}" y="${base-h-4}" text-anchor="middle" font-size="9" fill="var(--mut)">${shortDur(it.v)}</text>` : '')
+      + (it.now ? `<text x="${x+bw/2}" y="${base+12}" text-anchor="middle" font-size="9" fill="var(--acc)">agora</text>` : '');
+  }).join('');
+  const trend = items.length>=3 ? (()=>{
+    const past = items.filter(i=>!i.now), half = Math.floor(past.length/2) || 1;
+    const avg = a => a.reduce((s,i)=>s+i.v,0)/a.length;
+    const a1 = avg(past.slice(0,half)), a2 = avg(past.slice(-half));
+    return a2 > a1*1.1 ? '📈 Suas tentativas estão durando mais' : a2 < a1*.9 ? '📉 As últimas tentativas foram mais curtas — recomeçar faz parte' : '➡️ Suas tentativas estão estáveis';
+  })() : '';
+  return `<h3>Evolução das tentativas</h3>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+      ${best?`<line x1="0" x2="${W}" y1="${y(best)}" y2="${y(best)}" stroke="var(--acc2)" stroke-dasharray="4 4" stroke-width="1" opacity=".6"/>`:''}
+      <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--line)"/>
+      ${bars}
+    </svg>
+    <div class="mut">${trend}${trend?' · ':''}linha tracejada = recorde</div>`;
+}
+
+/* ---- tela ---- */
+function msChips(cur){
+  const nx = nextMs(cur);
+  let list = MS.filter(m => nx ? m<=nx : true);
+  if(list.length > 6) list = list.slice(-6);
+  return `<div class="ms">${list.map(m=>{
+    const ok = cur >= m*DAY;
+    return `<span class="${ok?'ok':(m===nx?'nx':'')}">${ok?'✓ ':''}${m}d</span>`;
+  }).join('')}</div>
+  ${nx?`<div class="mut">Próximo marco: <b>${dayWord(nx)}</b> — faltam ${dur(nx*DAY-cur)}</div>`:'<div class="mut">Você passou de todos os marcos! 🏆</div>'}`;
+}
 function renderFasts(){
   const el = $('#s-jejum');
   if(!D.fasts.length){ el.innerHTML = `<div class="card empty"><div>⏳</div>Nenhum jejum ainda.<br>Toque em <b>+</b> para começar (ex.: jejum de doce).</div>`; return; }
@@ -262,27 +393,37 @@ function renderFasts(){
     const p = parts(cur);
     const pct = best ? Math.min(100, cur/best*100) : 100;
     const beating = f.startedAt && best && cur>best;
+    const tgt = f.targetDays ? f.targetDays*DAY : 0;
+    const tgtDone = f.startedAt && tgt && cur >= tgt;
     const total = f.history.length;
+    const breaks = f.history.filter(h=>!h.done).length;
+    const badge = !f.startedAt ? '' : tgtDone ? '<span class="badge rec">✅ meta cumprida</span>' : beating ? '<span class="badge rec">🏆 recorde!</span>' : '<span class="badge live">● ativo</span>';
     return `<div class="card">
       <div class="row"><div class="icon">${f.icon||'⏳'}</div>
         <div class="sp"><h2>${esc(f.name)}</h2>
-        <div class="mut">${f.startedAt?'desde '+fmtDateTime(f.startedAt):'pausado'}</div></div>
-        ${f.startedAt?(beating?'<span class="badge rec">🏆 recorde!</span>':'<span class="badge live">● ativo</span>'):''}
+        <div class="mut">${f.startedAt?'desde '+fmtDateTime(f.startedAt):'pausado'}${f.targetDays?' · meta '+dayWord(f.targetDays):''}</div></div>
+        ${badge}
       </div>
+      ${f.reason?`<div class="reason">“${esc(f.reason)}”</div>`:''}
       ${f.startedAt?`
         <div class="big" data-live="${f.id}">${p.d}<small>d</small>${p.h}<small>h</small>${pad(p.m)}<small>m</small>${pad(p.s)}<small>s</small></div>
-        ${best?`<div class="bar ${beating?'g':''}"><i style="width:${pct}%"></i></div>
-        <div class="mut" data-goal="${f.id}">${beating?`Você já passou seu recorde em ${dur(cur-best)} 🔥`:`Faltam ${dur(best-cur)} para bater seu recorde (${dur(best)})`}</div>`
-        :`<div class="mut">Primeira tentativa — esse tempo vai virar sua meta.</div>`}
-        <button class="red full" onclick="breakFast('${f.id}')">Quebrei o jejum</button>`
+        ${tgt?`<div class="lbl">Prazo</div><div class="bar g"><i style="width:${Math.min(100,cur/tgt*100)}%"></i></div>
+          <div class="mut">${tgtDone?`Meta de ${dayWord(f.targetDays)} cumprida! 🏁`:`Faltam ${dur(tgt-cur)} para completar ${dayWord(f.targetDays)} · termina ${fmtDateTime(f.startedAt+tgt)}`}</div>`:''}
+        ${best?`<div class="lbl">Recorde</div><div class="bar ${beating?'g':''}"><i style="width:${pct}%"></i></div>
+        <div class="mut">${beating?`Você já passou seu recorde em ${dur(cur-best)} 🔥`:`Faltam ${dur(best-cur)} para bater seu recorde (${dur(best)})`}</div>`
+        :`<div class="mut" style="margin-top:6px">Primeira tentativa — esse tempo vai virar sua meta.</div>`}
+        <div class="lbl">Marcos</div>${msChips(cur)}
+        ${tgtDone?`<div class="btns"><button class="green" onclick="completeFast('${f.id}')">Encerrar ✅</button><button class="sec2" onclick="breakFast('${f.id}')">Quebrei</button></div>`
+          :`<button class="red full" onclick="breakFast('${f.id}')">Quebrei o jejum</button>`}`
       :`<button class="full" onclick="startFast('${f.id}')">▶ Começar de novo</button>`}
       <div class="stats">
         <div class="stat"><b>${record?dur(record):'—'}</b><span>maior jejum</span></div>
         <div class="stat"><b>${total?dur(f.history.reduce((a,h)=>a+h.end-h.start,0)/total):'—'}</b><span>média</span></div>
-        <div class="stat"><b>${total}</b><span>quebras</span></div>
+        <div class="stat"><b>${breaks}</b><span>quebras</span></div>
       </div>
+      ${fastChart(f)}
       ${total?`<h3>Histórico</h3><ul class="list">${f.history.slice(0,10).map((h,i)=>`<li>
-        <span>${h.end-h.start===best?'🏆':'•'}</span>
+        <span>${h.end-h.start===best?'🏆':(h.done?'✅':'•')}</span>
         <div class="sp"><b>${dur(h.end-h.start)}</b> <span class="mut">${fmtDate(h.start)} → ${fmtDate(h.end)}</span>${h.note?`<div class="mut">${esc(h.note)}</div>`:''}</div>
         <button class="ghost" onclick="editFastHist('${f.id}',${i})">✎</button><button class="ghost" onclick="delFastHist('${f.id}',${i})">✕</button></li>`).join('')}</ul>`:''}
       <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="editFast('${f.id}')">✎ Editar</button><button class="ghost" onclick="delFast('${f.id}')">Excluir jejum</button></div>
@@ -290,6 +431,7 @@ function renderFasts(){
   }).join('');
 }
 setInterval(()=>{
+  checkMilestones();
   if(tab!=='jejum' || $('#dlg').open) return;
   document.querySelectorAll('[data-live]').forEach(el=>{
     const f = D.fasts.find(x=>x.id===el.dataset.live); if(!f||!f.startedAt) return;
