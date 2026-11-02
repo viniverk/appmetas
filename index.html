@@ -119,6 +119,28 @@
   .sheetx{position:absolute;right:16px;top:14px;z-index:2;font-size:16px}
   @keyframes up{from{transform:translateY(40%)}}
   @keyframes fade{from{opacity:0}}
+  .hcard .row{gap:12px}
+  .hnum{text-align:right;line-height:1;flex:none}
+  .hnum b{font-size:30px;font-variant-numeric:tabular-nums;display:block}
+  .hnum span{font-size:11px;color:var(--mut)}
+  .hnum.rec b{color:var(--acc2)}
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px}
+  .week div{border-radius:12px;background:var(--card2);padding:6px 0;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+  .week small{font-size:10px;color:var(--mut)}
+  .week b{font-size:14px}
+  .week div.on{background:var(--acc2);color:#10251a}
+  .week div.on small{color:#10251a}
+  .week div.today{outline:2px solid var(--acc);outline-offset:-2px}
+  .week div.fut{opacity:.3;cursor:default}
+  .hline{margin-top:10px;font-size:12.5px}
+  .hcard .btns{margin-top:10px}
+  .hcard .btns button{padding:10px 14px}
+  .remind{display:flex;align-items:center;gap:10px;background:#3b2a16;border:1px solid #5a4020;border-radius:14px;padding:10px 12px;margin:8px 0}
+  .remind button{padding:8px 12px}
+  .pcard{padding:14px}
+  .ptext{font-size:15px;margin-bottom:4px;white-space:pre-wrap}
+  .pcard.done{opacity:.9}
+  .pcard .reason{margin-top:8px}
   .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--acc2);color:#10251a;padding:10px 16px;border-radius:99px;font-weight:600;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;white-space:nowrap}
   .toast.on{opacity:1}
 </style>
@@ -130,6 +152,7 @@
 </header>
 
 <main>
+  <div id="remind"></div>
   <section class="sec on" id="s-jejum"></section>
   <section class="sec" id="s-livros"></section>
   <section class="sec" id="s-habitos"></section>
@@ -154,7 +177,7 @@ const KEY = 'minhasMetas.v1';
 let D = load();
 function load(){
   try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d) return d; }catch(e){}
-  return { fasts:[], books:[], goals:{}, habits:[] };
+  return { fasts:[], books:[], goals:{}, habits:[], prayers:[] };
 }
 function save(){
   D.updatedAt = Date.now();
@@ -204,8 +227,8 @@ function go(t){
   $('#fab').style.display = t==='config' ? 'none' : '';
   render();
 }
-function fabAction(){ ({jejum:newFast,livros:newBook,habitos:newHabit})[tab]?.(); }
-function render(){ ({jejum:renderFasts,livros:renderBooks,habitos:renderHabits,config:renderConfig})[tab](); }
+function fabAction(){ if(tab==='habitos' && habitView==='pedidos') return newPrayer(); ({jejum:newFast,livros:newBook,habitos:newHabit})[tab]?.(); }
+function render(){ D.prayers = D.prayers || []; ({jejum:renderFasts,livros:renderBooks,habitos:renderHabits,config:renderConfig})[tab](); renderRemind(); }
 
 /* ============ Diálogo genérico ============ */
 function dialog(html, onSubmit){
@@ -609,61 +632,222 @@ function renderBooks(){
 
 /* ============ SEQUÊNCIAS (hábitos) ============ */
 const HABIT_IDEAS = ['🙏 Oração','📖 Leitura bíblica','🏃 Exercício','💧 Beber água','📵 Sem celular à noite','✍️ Devocional'];
+const WD = ['D','S','T','Q','Q','S','S'];
+const isDaily = h => !h.perWeek || h.perWeek>=7;
+const weekStart = k => addDays(k, -keyToDate(k).getDay());
+let habitView = 'habitos';
+const openHabits = new Set();
+
+function habitForm(h){
+  h = h || {};
+  const pw = h.perWeek && h.perWeek<7 ? h.perWeek : 7;
+  return `
+    <label>Hábito</label><input name="name" required placeholder="Ex.: Oração" maxlength="40" value="${esc(h.name||'')}">
+    ${h.id?`<label>Ícone</label><input name="icon" maxlength="4" value="${esc(h.icon||'⭐')}">`
+      :`<div class="chips">${HABIT_IDEAS.map(i=>`<button type="button" onclick="this.form.name.value='${i.split(' ').slice(1).join(' ')}';this.form.icon.value='${i.split(' ')[0]}'">${i}</button>`).join('')}</div>
+    <input type="hidden" name="icon" value="⭐">`}
+    <label>Frequência</label>
+    <select name="perWeek">${[7,6,5,4,3,2,1].map(n=>`<option value="${n}" ${n===pw?'selected':''}>${n===7?'Todos os dias':n+'x por semana'}</option>`).join('')}</select>
+    <label>Lembrete diário (opcional)</label>
+    <input type="time" name="reminder" value="${h.reminder||''}">
+    <p class="mut" style="margin:6px 0 0">Com o app aberto você recebe o aviso no horário. Para avisar mesmo com o app fechado, use o botão “Adicionar ao calendário” nos detalhes do hábito.</p>`;
+}
+function readHabitForm(fd, h){
+  h.name = fd.get('name').trim(); h.icon = (fd.get('icon')||'').trim() || '⭐';
+  const pw = Number(fd.get('perWeek')); h.perWeek = pw>=7 ? null : pw;
+  h.reminder = fd.get('reminder') || null;
+  if(h.reminder) askNotify();
+}
 function newHabit(){
-  dialog(`<h2>Nova sequência</h2>
-    <label>Hábito diário</label><input name="name" required placeholder="Ex.: Oração" maxlength="40">
-    <div class="chips">${HABIT_IDEAS.map(i=>`<button type="button" onclick="this.form.name.value='${i.split(' ').slice(1).join(' ')}';this.form.icon.value='${i.split(' ')[0]}'">${i}</button>`).join('')}</div>
-    <input type="hidden" name="icon" value="⭐">`,
-  fd=>{ D.habits.push({id:uid(), name:fd.get('name').trim(), icon:fd.get('icon')||'⭐', days:[]}); });
+  dialog(`<h2>Nova sequência</h2>${habitForm()}`, fd=>{
+    const h = {id:uid(), days:[]}; readHabitForm(fd, h); D.habits.push(h);
+  });
+}
+function editHabit(id){
+  const h = D.habits.find(x=>x.id===id);
+  dialog(`<h2>Editar sequência</h2>${habitForm(h)}`, fd=>{ readHabitForm(fd, h); toast('Atualizado ✓'); });
 }
 function streaks(days){
   const set = new Set(days), t = todayKey();
-  // atual: conta a partir de hoje (ou ontem, se hoje ainda não marcou)
   let k = set.has(t) ? t : addDays(t,-1), cur = 0;
   while(set.has(k)){ cur++; k = addDays(k,-1); }
-  // melhor
   let best = 0, run = 0, prev = null;
   [...set].sort().forEach(d=>{ run = (prev && addDays(prev,1)===d) ? run+1 : 1; best=Math.max(best,run); prev=d; });
   return {cur, best, total:set.size, doneToday:set.has(t)};
 }
+function weekStreaks(days, n){
+  const t = todayKey(), tw = weekStart(t), cnt = {};
+  days.forEach(d=>{ const w = weekStart(d); cnt[w] = (cnt[w]||0)+1; });
+  const ok = w => (cnt[w]||0) >= n;
+  let w = ok(tw) ? tw : addDays(tw,-7), cur = 0;
+  while(ok(w)){ cur++; w = addDays(w,-7); }
+  let best = 0, run = 0, prev = null;
+  Object.keys(cnt).filter(ok).sort().forEach(x=>{ run = (prev && addDays(prev,7)===x) ? run+1 : 1; best = Math.max(best,run); prev = x; });
+  return {cur, best, total:days.length, doneToday:days.includes(t), week:cnt[tw]||0};
+}
+const hStats = h => isDaily(h) ? streaks(h.days) : weekStreaks(h.days, h.perWeek);
+const unit = (h,n) => isDaily(h) ? (n===1?'dia':'dias') : (n===1?'semana':'semanas');
+
 function toggleDay(id,k){
   if(k>todayKey()) return;
   const h = D.habits.find(x=>x.id===id), i = h.days.indexOf(k);
   if(i>=0) h.days.splice(i,1); else h.days.push(k);
-  const s = streaks(h.days);
+  const s = hStats(h);
   save(); render();
-  if(i<0 && k===todayKey()) toast(s.cur>1 && s.cur===s.best ? `🏆 Recorde: ${s.cur} dias seguidos!` : `${s.cur} ${s.cur===1?'dia':'dias'} seguidos 🔥`);
+  if(i>=0 || k!==todayKey()) return;
+  if(isDaily(h)) toast(s.cur>1 && s.cur===s.best ? `🏆 Recorde: ${s.cur} dias seguidos!` : `${s.cur} ${unit(h,s.cur)} seguidos 🔥`);
+  else if(s.week===h.perWeek) toast(`✅ Meta da semana! ${s.cur} ${unit(h,s.cur)} seguidas`);
+  else toast(`${s.week}/${h.perWeek} esta semana`);
 }
 function delHabit(id){ confirmBox('Excluir esta sequência?','Excluir',()=>{ D.habits=D.habits.filter(h=>h.id!==id); }); }
-function renderHabits(){
-  const el = $('#s-habitos');
-  if(!D.habits.length){ el.innerHTML = `<div class="card empty"><div>🙏</div>Toque em <b>+</b> para criar uma sequência<br>(ex.: dias seguidos de oração).</div>`; return; }
+function toggleHabit(id){ openHabits.has(id) ? openHabits.delete(id) : openHabits.add(id); renderHabits(); }
+function setHabitView(v){ habitView = v; renderHabits(); }
+
+/* ---- lembretes ---- */
+function askNotify(){
+  try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){}
+}
+let swReg = null;
+try{ if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').then(r=>swReg=r).catch(()=>{}); }catch(e){}
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function pendingReminders(){
+  const t = todayKey(), hm = nowHM();
+  return D.habits.filter(h=>{
+    if(!h.reminder || h.reminder > hm) return false;
+    const s = hStats(h);
+    return !s.doneToday && (isDaily(h) || s.week < h.perWeek);
+  });
+}
+function checkReminders(){
   const t = todayKey();
-  // últimas 5 semanas, alinhadas para terminar no sábado da semana atual
+  pendingReminders().forEach(h=>{
+    const key = `minhasMetas.notif.${h.id}.${t}`;
+    try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); }catch(e){ return; }
+    const title = `${h.icon} Hora de: ${h.name}`, body = 'Toque para marcar no Minhas Metas';
+    try{
+      if('Notification' in window && Notification.permission==='granted'){
+        if(swReg) swReg.showNotification(title,{body, tag:h.id});
+        else new Notification(title,{body, tag:h.id});
+      }
+    }catch(e){}
+  });
+  renderRemind();
+}
+function renderRemind(){
+  const el = $('#remind'); if(!el) return;
+  const list = pendingReminders();
+  el.innerHTML = list.map(h=>`<div class="remind"><span>🔔</span><div class="sp"><b>${esc(h.name)}</b><div class="mut">lembrete das ${h.reminder}</div></div>
+    <button class="green" onclick="toggleDay('${h.id}','${todayKey()}')">Feito ✓</button></div>`).join('');
+}
+setInterval(checkReminders, 30000);
+function downloadIcs(id){
+  const h = D.habits.find(x=>x.id===id); if(!h.reminder){ toast('Defina um horário de lembrete primeiro'); return; }
+  const d = new Date(), stamp = d.toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
+  const [hh,mm] = h.reminder.split(':');
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Minhas Metas//PT','BEGIN:VEVENT',
+    `UID:${h.id}@appmetas`,`DTSTAMP:${stamp}`,`DTSTART:${todayKey().replace(/-/g,'')}T${hh}${mm}00`,'DURATION:PT10M','RRULE:FREQ=DAILY',
+    `SUMMARY:${h.icon} ${h.name}`,'DESCRIPTION:Marcar no app: https://viniverk.github.io/appmetas/',
+    'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY',`DESCRIPTION:${h.name}`,'END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics],{type:'text/calendar'}));
+  a.download = `lembrete-${h.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/gi,'-')}.ics`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  toast('Abra o arquivo para adicionar ao calendário');
+}
+
+/* ---- diário de oração ---- */
+function newPrayer(p){
+  p = p || {};
+  dialog(`<h2>${p.id?'Editar pedido':'Novo pedido de oração'}</h2>
+    <label>Pedido</label><textarea name="text" rows="3" required maxlength="300" placeholder="O que você está pedindo a Deus?">${esc(p.text||'')}</textarea>
+    <label>Por quem? (opcional)</label><input name="who" maxlength="40" value="${esc(p.who||'')}" placeholder="Ex.: minha família">`,
+  fd=>{
+    if(p.id){ p.text = fd.get('text').trim(); p.who = fd.get('who').trim(); toast('Atualizado ✓'); return; }
+    D.prayers.unshift({id:uid(), text:fd.get('text').trim(), who:fd.get('who').trim(), created:Date.now(), answered:null, answer:''});
+    toast('Pedido anotado 🙏');
+  });
+}
+function editPrayer(id){ newPrayer(D.prayers.find(x=>x.id===id)); }
+function answerPrayer(id){
+  const p = D.prayers.find(x=>x.id===id);
+  dialog(`<h2>Oração respondida 🙌</h2>
+    <p class="mut">${esc(p.text)}</p>
+    <label>Quando?</label><input type="date" name="date" value="${todayKey()}" max="${todayKey()}">
+    <label>Como Deus respondeu? (opcional)</label><textarea name="answer" rows="3" maxlength="400"></textarea>`,
+  fd=>{
+    const k = fd.get('date') || todayKey();
+    p.answered = Math.max(p.created, k===todayKey() ? Date.now() : keyToDate(k).getTime() + 12*36e5);
+    p.answer = (fd.get('answer')||'').trim();
+    setTimeout(()=>celebrate('🙌','Oração respondida!', `Depois de ${dayWord(Math.max(1,Math.round((p.answered-p.created)/DAY)))} orando. Glória a Deus!`), 50);
+  });
+}
+function unanswerPrayer(id){ const p = D.prayers.find(x=>x.id===id); p.answered = null; p.answer=''; save(); render(); }
+function delPrayer(id){ confirmBox('Apagar este pedido?','Apagar',()=>{ D.prayers = D.prayers.filter(p=>p.id!==id); }); }
+function renderPrayers(){
+  const open = D.prayers.filter(p=>!p.answered), ans = D.prayers.filter(p=>p.answered).sort((a,b)=>b.answered-a.answered);
+  if(!D.prayers.length) return `<div class="card empty"><div>🙏</div>Anote aqui seus pedidos de oração.<br>Quando Deus responder, marque como respondido —<br>com o tempo vira um histórico de respostas.<br><br>Toque em <b>+</b> para começar.</div>`;
+  const days = ms => Math.max(0, Math.floor(ms/DAY));
+  return `<div class="card"><div class="stats" style="margin-top:0">
+      <div class="stat"><b>${open.length}</b><span>em oração</span></div>
+      <div class="stat"><b>${ans.length}</b><span>respondidas</span></div>
+      <div class="stat"><b>${ans.length?Math.round(ans.reduce((a,p)=>a+(p.answered-p.created),0)/ans.length/DAY):'—'}</b><span>dias em média</span></div>
+    </div></div>
+    ${open.length?`<h3>Em oração</h3>${open.map(p=>`<div class="card pcard">
+      <div class="ptext">${esc(p.text)}</div>
+      <div class="mut">${p.who?'por '+esc(p.who)+' · ':''}${days(Date.now()-p.created)?'orando há '+dayWord(days(Date.now()-p.created)):'começou hoje'}</div>
+      <div class="row" style="margin-top:10px"><button class="green" style="padding:8px 14px" onclick="answerPrayer('${p.id}')">Respondida 🙌</button><span class="sp"></span>
+        <button class="ghost" onclick="editPrayer('${p.id}')">✎</button><button class="ghost" onclick="delPrayer('${p.id}')">✕</button></div>
+    </div>`).join('')}`:''}
+    ${ans.length?`<h3>Respondidas</h3>${ans.map(p=>`<div class="card pcard done">
+      <div class="ptext">✅ ${esc(p.text)}</div>
+      ${p.answer?`<div class="reason">“${esc(p.answer)}”</div>`:''}
+      <div class="mut" style="margin-top:6px">${p.who?'por '+esc(p.who)+' · ':''}respondida em ${fmtDate(p.answered)} · após ${dayWord(Math.max(1,days(p.answered-p.created)))}</div>
+      <div style="text-align:right"><button class="ghost" onclick="unanswerPrayer('${p.id}')">Desfazer</button><button class="ghost" onclick="delPrayer('${p.id}')">✕</button></div>
+    </div>`).join('')}`:''}`;
+}
+
+/* ---- tela ---- */
+function habitCard(h){
+  const t = todayKey(), s = hStats(h), set = new Set(h.days), daily = isDaily(h), open = openHabits.has(h.id);
+  const ws = weekStart(t), week = Array.from({length:7},(_,i)=>addDays(ws,i));
+  const atRecord = s.cur && s.cur>=s.best && s.best>1;
   const end = addDays(t, 6 - keyToDate(t).getDay());
   const cells = Array.from({length:35},(_,i)=>addDays(end, i-34));
-  el.innerHTML = D.habits.map(h=>{
-    const s = streaks(h.days), set = new Set(h.days);
-    const pct = s.best ? Math.min(100, s.cur/s.best*100) : 0;
-    return `<div class="card">
-      <div class="row"><div class="icon">${h.icon}</div>
-        <div class="sp"><h2>${esc(h.name)}</h2><div class="mut">${s.doneToday?'Feito hoje ✓':'Ainda não marcado hoje'}</div></div>
-        ${s.cur && s.cur===s.best && s.best>1?'<span class="badge rec">🏆 recorde</span>':''}</div>
-      <div class="big">${s.cur}<small>${s.cur===1?'dia seguido':'dias seguidos'}</small></div>
-      ${s.best?`<div class="bar g"><i style="width:${pct}%"></i></div>
-      <div class="mut">${s.cur>=s.best?'Você está no seu recorde 🔥':`Faltam ${s.best-s.cur+1} dias para bater seu recorde (${s.best})`}</div>`:''}
-      <button class="full ${s.doneToday?'done':'green'}" onclick="toggleDay('${h.id}','${t}')">${s.doneToday?'✓ Feito hoje (toque para desfazer)':'Marcar hoje'}</button>
-      <div class="stats">
+  return `<div class="card hcard">
+    <div class="row">
+      <div class="icon">${h.icon}</div>
+      <div class="sp" style="min-width:0"><h2 class="ell">${esc(h.name)}</h2>
+        <div class="mut">${daily?'todo dia':h.perWeek+'x por semana'}${h.reminder?' · 🔔 '+h.reminder:''}</div></div>
+      <div class="hnum ${atRecord?'rec':''}"><b>${s.cur}</b><span>${unit(h,s.cur)}${atRecord?' 🏆':''}</span></div>
+    </div>
+    <div class="week">${week.map((k,i)=>`<div class="${set.has(k)?'on':''} ${k===t?'today':''} ${k>t?'fut':''}" onclick="toggleDay('${h.id}','${k}')"><small>${WD[i]}</small><b>${set.has(k)?'✓':Number(k.slice(8))}</b></div>`).join('')}</div>
+    <div class="mut hline">${daily
+      ? (s.best ? (s.cur>=s.best ? 'No seu recorde 🔥' : `Recorde: ${s.best} dias · faltam ${s.best-s.cur+1}`) : 'Comece sua sequência hoje')
+      : `${s.week>=h.perWeek?'✅':'🎯'} ${Math.min(s.week,h.perWeek)}/${h.perWeek} esta semana · recorde ${s.best} ${unit(h,s.best)}`}</div>
+    <div class="btns">
+      <button class="${s.doneToday?'done':'green'}" onclick="toggleDay('${h.id}','${t}')">${s.doneToday?'✓ Feito hoje':'Marcar hoje'}</button>
+      <button class="sec2" style="flex:0 0 auto" onclick="toggleHabit('${h.id}')">${open?'▴':'▾'}</button>
+    </div>
+    ${open?`<div class="details">
+      <div class="stats" style="margin-top:0">
         <div class="stat"><b>${s.cur}</b><span>atual</span></div>
-        <div class="stat"><b>${s.best}</b><span>recorde</span></div>
+        <div class="stat"><b>${s.best}</b><span>recorde (${daily?'dias':'sem.'})</span></div>
         <div class="stat"><b>${s.total}</b><span>dias no total</span></div>
       </div>
-      <h3>Últimas semanas <span style="text-transform:none;letter-spacing:0;font-weight:400">· toque num dia para marcar/desmarcar</span></h3>
-      <div class="grid">${['D','S','T','Q','Q','S','S'].map(d=>`<div style="background:none;cursor:default">${d}</div>`).join('')}
+      <h3>Últimas semanas <span style="text-transform:none;letter-spacing:0;font-weight:400">· toque para marcar</span></h3>
+      <div class="grid">${WD.map(d=>`<div style="background:none;cursor:default">${d}</div>`).join('')}
         ${cells.map(k=>`<div class="${set.has(k)?'on':''} ${k===t?'today':''} ${k>t?'fut':''}" onclick="toggleDay('${h.id}','${k}')">${Number(k.slice(8))}</div>`).join('')}</div>
-      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="delHabit('${h.id}')">Excluir</button></div>
-    </div>`;
-  }).join('');
+      ${h.reminder?`<button class="sec2 full" onclick="downloadIcs('${h.id}')">📅 Adicionar lembrete ao calendário</button>`:''}
+      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="editHabit('${h.id}')">✎ Editar</button><button class="ghost" onclick="delHabit('${h.id}')">Excluir</button></div>
+    </div>`:''}
+  </div>`;
+}
+function renderHabits(){
+  const el = $('#s-habitos');
+  const seg = `<div class="seg"><button class="${habitView==='habitos'?'on':''}" onclick="setHabitView('habitos')">🔥 Hábitos</button><button class="${habitView==='pedidos'?'on':''}" onclick="setHabitView('pedidos')">🙏 Pedidos</button></div>`;
+  if(habitView==='pedidos'){ el.innerHTML = seg + renderPrayers(); return; }
+  el.innerHTML = seg + (D.habits.length ? D.habits.map(habitCard).join('')
+    : `<div class="card empty"><div>🔥</div>Toque em <b>+</b> para criar uma sequência<br>(ex.: dias seguidos de oração, academia 3x por semana).</div>`);
 }
 
 /* ============ BACKUP ============ */
@@ -683,7 +867,7 @@ function renderConfig(){
   <div class="card"><h2>Dica</h2>
     <p class="mut">No celular, abra o menu do navegador e toque em <b>“Adicionar à tela inicial”</b>. O app fica com ícone, igual a um aplicativo.</p>
   </div>
-  <div class="card"><button class="ghost" style="color:var(--red)" onclick="confirmBox('Apagar TODOS os dados?','Apagar tudo',()=>{D={fasts:[],books:[],goals:{},habits:[]};})">Apagar todos os dados</button></div>`;
+  <div class="card"><button class="ghost" style="color:var(--red)" onclick="confirmBox('Apagar TODOS os dados?','Apagar tudo',()=>{D={fasts:[],books:[],goals:{},habits:[],prayers:[]};})">Apagar todos os dados</button></div>`;
 }
 function exportData(){
   const blob = new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
@@ -697,7 +881,7 @@ function importData(inp){
     try{
       const d = JSON.parse(r.result);
       if(!Array.isArray(d.fasts)||!Array.isArray(d.habits)||!Array.isArray(d.books)) throw 0;
-      D = {fasts:d.fasts, books:d.books, goals:d.goals||{}, habits:d.habits}; save(); render(); toast('Backup restaurado ✓');
+      D = {fasts:d.fasts, books:d.books, goals:d.goals||{}, habits:d.habits, prayers:d.prayers||[]}; save(); render(); toast('Backup restaurado ✓');
     }catch(e){ toast('Arquivo inválido'); }
     inp.value='';
   };
@@ -801,6 +985,7 @@ function fbCard(){
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render(); });
 render();
 fbInit();
+setTimeout(checkReminders, 1500);
 </script>
 </body>
 </html>
