@@ -272,14 +272,21 @@ function newBook(){
     <label>Título</label><input name="title" required maxlength="80">
     <label>Autor (opcional)</label><input name="author" maxlength="60">
     <label>Status</label>
-    <select name="status"><option value="lendo">Estou lendo</option><option value="lido">Já terminei</option><option value="quero">Quero ler</option></select>
-    <label>Data em que terminou (se já leu)</label><input type="date" name="end" value="${todayKey()}">`,
+    <select name="status" onchange="bookDateField(this.form)"><option value="lendo">Estou lendo</option><option value="lido">Já terminei</option><option value="quero">Quero ler</option></select>
+    <div id="bookDateBox"><label id="bookDateLbl">Começou a ler em</label><input type="date" name="date" value="${todayKey()}" max="${todayKey()}"></div>`,
   fd=>{
     const st = fd.get('status');
+    const dt = keyToDate(fd.get('date')||todayKey()).getTime();
     D.books.unshift({id:uid(), title:fd.get('title').trim(), author:fd.get('author').trim(), status:st,
-      start: st==='quero'?null:Date.now(), end: st==='lido' ? keyToDate(fd.get('end')||todayKey()).getTime() : null});
+      start: st==='quero' ? null : dt, end: st==='lido' ? dt : null});
     toast(st==='lido'?'Mais um! 📖':'Livro adicionado');
   });
+}
+function bookDateField(f){
+  const st = f.status.value, box = $('#bookDateBox');
+  if(st==='quero'){ box.style.display='none'; f.date.value=''; return; }
+  box.style.display=''; if(!f.date.value) f.date.value = todayKey();
+  $('#bookDateLbl').textContent = st==='lido' ? 'Terminou de ler em' : 'Começou a ler em';
 }
 function finishBook(id){ const b=D.books.find(x=>x.id===id); b.status='lido'; b.end=Date.now(); save(); render(); toast('Parabéns, livro concluído! 🎉'); }
 function startBook(id){ const b=D.books.find(x=>x.id===id); b.status='lendo'; b.start=Date.now(); save(); render(); }
