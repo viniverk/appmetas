@@ -107,7 +107,11 @@ function load(){
   try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d) return d; }catch(e){}
   return { fasts:[], books:[], goals:{}, habits:[] };
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){ toast('Não foi possível salvar'); } }
+function save(){
+  D.updatedAt = Date.now();
+  try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){ toast('Não foi possível salvar'); }
+  cloudPush();
+}
 const uid = () => Math.random().toString(36).slice(2,10);
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -388,7 +392,7 @@ function renderHabits(){
 
 /* ============ BACKUP ============ */
 function renderConfig(){
-  $('#s-config').innerHTML = `
+  $('#s-config').innerHTML = fbCard() + `
   <div class="card"><h2>Seus dados</h2>
     <p class="mut">Tudo fica salvo só neste navegador/aparelho. Se trocar de celular ou limpar o navegador, os dados somem — então faça backup de vez em quando.</p>
     <div class="stats">
@@ -424,8 +428,96 @@ function importData(inp){
   r.readAsText(file);
 }
 
+/* ============ FIREBASE (backup na nuvem) ============ */
+// Cole aqui o firebaseConfig do seu projeto (ou cole pela aba Backup do app).
+const FIREBASE_CONFIG = null;
+
+const FB_KEY = 'minhasMetas.firebase';
+const FB_V = 'https://www.gstatic.com/firebasejs/10.12.2/';
+const FB = { m:null, auth:null, db:null, user:null, unsub:null, status:'', ready:false };
+function fbCfg(){
+  if(FIREBASE_CONFIG) return FIREBASE_CONFIG;
+  try{ return JSON.parse(localStorage.getItem(FB_KEY)); }catch(e){ return null; }
+}
+function parseCfg(txt){
+  const o = {};
+  ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(k=>{
+    const m = txt.match(new RegExp(k+'["\']?\\s*:\\s*["\']([^"\']+)["\']'));
+    if(m) o[k] = m[1];
+  });
+  return (o.apiKey && o.projectId && o.appId) ? o : null;
+}
+function setStatus(s){ FB.status = s; const el = $('#fbStatus'); if(el) el.textContent = s; }
+async function fbInit(){
+  const cfg = fbCfg(); if(!cfg) return;
+  setStatus('Carregando…');
+  try{
+    const [a,au,fs] = await Promise.all(['app','auth','firestore'].map(n=>import(FB_V+'firebase-'+n+'.js')));
+    FB.m = {...a,...au,...fs};
+    const app = a.initializeApp(cfg);
+    FB.auth = au.getAuth(app); FB.db = fs.getFirestore(app); FB.ready = true;
+    au.onAuthStateChanged(FB.auth, u=>{
+      FB.user = u;
+      if(FB.unsub){ FB.unsub(); FB.unsub = null; }
+      if(u) startSync(); else setStatus('Não conectado');
+      if(tab==='config') render();
+    });
+  }catch(e){ setStatus('Erro ao carregar o Firebase (sem internet?)'); }
+}
+const userDoc = () => FB.m.doc(FB.db, 'usuarios', FB.user.uid);
+function startSync(){
+  setStatus('Sincronizando…');
+  FB.unsub = FB.m.onSnapshot(userDoc(), snap=>{
+    const r = snap.exists() ? snap.data() : null;
+    const rt = r?.updatedAt || 0, lt = D.updatedAt || 0;
+    if(r && rt > lt){
+      try{ D = JSON.parse(r.data); localStorage.setItem(KEY, JSON.stringify(D)); render(); }catch(e){}
+    } else if(lt > rt) cloudPush(true);
+    if(!snap.metadata.hasPendingWrites) setStatus('Sincronizado ✓ ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
+  }, err=>setStatus('Erro: ' + err.code));
+}
+let pushT;
+function cloudPush(now){
+  if(!FB.user) return;
+  clearTimeout(pushT);
+  pushT = setTimeout(async()=>{
+    try{
+      setStatus('Salvando na nuvem…');
+      await FB.m.setDoc(userDoc(), { data: JSON.stringify(D), updatedAt: D.updatedAt || Date.now() });
+    }catch(e){ setStatus('Erro ao salvar: ' + (e.code || e.message)); }
+  }, now ? 0 : 1200);
+}
+async function fbLogin(){
+  if(!FB.ready){ toast('Firebase ainda carregando…'); return; }
+  try{ await FB.m.signInWithPopup(FB.auth, new FB.m.GoogleAuthProvider()); toast('Conectado ✓'); }
+  catch(e){ setStatus('Erro no login: ' + e.code); }
+}
+async function fbLogout(){ await FB.m.signOut(FB.auth); toast('Desconectado'); }
+function fbSaveCfg(){
+  const cfg = parseCfg($('#fbCfg').value);
+  if(!cfg){ toast('Configuração inválida'); return; }
+  localStorage.setItem(FB_KEY, JSON.stringify(cfg)); location.reload();
+}
+function fbRemoveCfg(){ confirmBox('Remover a configuração do Firebase deste aparelho?','Remover',()=>{ localStorage.removeItem(FB_KEY); setTimeout(()=>location.reload(),100); }); }
+function fbCard(){
+  if(!fbCfg()) return `<div class="card"><h2>☁️ Backup na nuvem</h2>
+    <p class="mut">Cole abaixo o <b>firebaseConfig</b> do seu projeto Firebase (o bloco com apiKey, authDomain, projectId…).</p>
+    <textarea id="fbCfg" rows="6" placeholder="const firebaseConfig = { apiKey: &quot;...&quot;, ... }"></textarea>
+    <button class="full" onclick="fbSaveCfg()">Salvar configuração</button></div>`;
+  if(!FB.user) return `<div class="card"><h2>☁️ Backup na nuvem</h2>
+    <p class="mut">Entre com sua conta Google. Depois disso, tudo é salvo na nuvem sozinho e aparece igual em qualquer aparelho.</p>
+    <div class="mut" id="fbStatus">${esc(FB.status)}</div>
+    <button class="full" onclick="fbLogin()">Entrar com Google</button>
+    ${FIREBASE_CONFIG?'':`<div style="text-align:right;margin-top:6px"><button class="ghost" onclick="fbRemoveCfg()">Remover configuração</button></div>`}</div>`;
+  return `<div class="card"><h2>☁️ Backup na nuvem</h2>
+    <p class="mut">Conectado como <b>${esc(FB.user.email)}</b>. Tudo que você registra é salvo automaticamente.</p>
+    <div class="mut" id="fbStatus" style="color:var(--acc2)">${esc(FB.status)}</div>
+    <div class="btns"><button class="sec2" onclick="cloudPush(true)">Salvar agora</button><button class="sec2" onclick="fbLogout()">Sair</button></div></div>`;
+}
+
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render(); });
 render();
+fbInit();
 </script>
 </body>
 </html>
