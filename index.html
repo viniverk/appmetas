@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14110f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Minhas Metas</title>
+<style>
+  :root{
+    --bg:#14110f; --card:#1f1a17; --card2:#2a2420; --line:#3a322c;
+    --txt:#f3ece4; --mut:#a89c90; --acc:#e0a458; --acc2:#7fb48a; --red:#d9715f; --blue:#7aa6d6;
+    --r:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body{padding:env(safe-area-inset-top) 0 calc(78px + env(safe-area-inset-bottom))}
+  header{padding:18px 18px 6px}
+  header h1{margin:0;font-size:22px;letter-spacing:.2px}
+  header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+  main{padding:8px 14px;max-width:640px;margin:0 auto}
+  .sec{display:none}.sec.on{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin:12px 0}
+  .row{display:flex;align-items:center;gap:10px}
+  .sp{flex:1}
+  h2{font-size:17px;margin:0}
+  h3{font-size:13px;margin:16px 0 6px;color:var(--mut);text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+  .mut{color:var(--mut);font-size:13px}
+  .big{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.5px;margin:10px 0 2px}
+  .big small{font-size:15px;color:var(--mut);font-weight:500;margin-left:2px;margin-right:8px}
+  .bar{height:8px;background:var(--card2);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+  .bar>i{display:block;height:100%;background:var(--acc);border-radius:99px;transition:width .4s}
+  .bar.g>i{background:var(--acc2)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .stat{background:var(--card2);border-radius:12px;padding:10px;text-align:center}
+  .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:11px;color:var(--mut)}
+  button{font:inherit;border:0;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;color:var(--bg);background:var(--acc)}
+  button.sec2{background:var(--card2);color:var(--txt)}
+  button.red{background:var(--red);color:#fff}
+  button.green{background:var(--acc2)}
+  button.ghost{background:none;color:var(--mut);padding:6px 8px;font-weight:500}
+  button.full{width:100%;margin-top:12px}
+  button.done{background:var(--card2);color:var(--acc2)}
+  .btns{display:flex;gap:8px;margin-top:12px}.btns>button{flex:1}
+  .badge{font-size:11px;padding:3px 8px;border-radius:99px;background:var(--card2);color:var(--mut)}
+  .badge.live{background:#3b2a16;color:var(--acc)}
+  .badge.rec{background:#1e3324;color:var(--acc2)}
+  ul.list{list-style:none;margin:0;padding:0}
+  ul.list li{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+  ul.list li:first-child{border-top:0}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px}
+  .grid div{aspect-ratio:1;border-radius:6px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--mut);cursor:pointer}
+  .grid div.on{background:var(--acc2);color:#10251a;font-weight:700}
+  .grid div.today{outline:2px solid var(--acc);outline-offset:-2px}
+  .grid div.fut{opacity:.25;cursor:default}
+  .empty{text-align:center;color:var(--mut);padding:30px 10px}
+  .empty div{font-size:40px;margin-bottom:6px}
+  nav{position:fixed;left:0;right:0;bottom:0;background:#1a1613ee;backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:5}
+  nav button{flex:1;background:none;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:11px;font-weight:500}
+  nav button span{font-size:21px}
+  nav button.on{color:var(--acc)}
+  .fab{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;font-size:28px;padding:0;box-shadow:0 6px 20px #0008;z-index:4}
+  dialog{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:20px;padding:20px;width:min(92vw,420px)}
+  dialog::backdrop{background:#000a}
+  dialog h2{margin-bottom:12px}
+  label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+  input,select,textarea{width:100%;font:inherit;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:11px;color-scheme:dark}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chips button{padding:7px 12px;font-size:13px;background:var(--card2);color:var(--txt);font-weight:500}
+  .icon{font-size:24px;width:40px;height:40px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;flex:none}
+  .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--acc2);color:#10251a;padding:10px 16px;border-radius:99px;font-weight:600;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;white-space:nowrap}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Jejuns</h1>
+  <p id="subtitle">Quanto tempo você está aguentando</p>
+</header>
+
+<main>
+  <section class="sec on" id="s-jejum"></section>
+  <section class="sec" id="s-livros"></section>
+  <section class="sec" id="s-habitos"></section>
+  <section class="sec" id="s-config"></section>
+</main>
+
+<button class="fab" id="fab" onclick="fabAction()">+</button>
+
+<nav>
+  <button class="on" data-t="jejum"><span>⏳</span>Jejuns</button>
+  <button data-t="livros"><span>📚</span>Leitura</button>
+  <button data-t="habitos"><span>🙏</span>Sequências</button>
+  <button data-t="config"><span>⚙️</span>Backup</button>
+</nav>
+
+<dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ Dados ============ */
+const KEY = 'minhasMetas.v1';
+let D = load();
+function load(){
+  try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d) return d; }catch(e){}
+  return { fasts:[], books:[], goals:{}, habits:[] };
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(D)); }catch(e){ toast('Não foi possível salvar'); } }
+const uid = () => Math.random().toString(36).slice(2,10);
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ============ Datas ============ */
+const pad = n => String(n).padStart(2,'0');
+const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayKey = () => dayKey(new Date());
+const keyToDate = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays = (k,n) => { const d = keyToDate(k); d.setDate(d.getDate()+n); return dayKey(d); };
+const fmtDate = ts => new Date(ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
+const fmtDateTime = ts => new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const toLocalInput = ts => { const d = new Date(ts); return `${dayKey(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+function parts(ms){
+  ms = Math.max(0,ms);
+  const s = Math.floor(ms/1000);
+  return { d:Math.floor(s/86400), h:Math.floor(s%86400/3600), m:Math.floor(s%3600/60), s:s%60 };
+}
+function dur(ms){
+  const p = parts(ms);
+  if(p.d) return `${p.d}d ${p.h}h`;
+  if(p.h) return `${p.h}h ${p.m}min`;
+  return `${p.m}min`;
+}
+
+/* ============ Navegação ============ */
+const TABS = {
+  jejum:{t:'Jejuns',s:'Quanto tempo você está aguentando'},
+  livros:{t:'Leitura',s:'Livros lidos e meta do ano'},
+  habitos:{t:'Sequências',s:'Dias seguidos de oração e outros hábitos'},
+  config:{t:'Backup',s:'Seus dados ficam salvos neste aparelho'}
+};
+let tab = 'jejum';
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.t));
+function go(t){
+  tab = t;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));
+  $('#title').textContent = TABS[t].t; $('#subtitle').textContent = TABS[t].s;
+  $('#fab').style.display = t==='config' ? 'none' : '';
+  render();
+}
+function fabAction(){ ({jejum:newFast,livros:newBook,habitos:newHabit})[tab]?.(); }
+function render(){ ({jejum:renderFasts,livros:renderBooks,habitos:renderHabits,config:renderConfig})[tab](); }
+
+/* ============ Diálogo genérico ============ */
+function dialog(html, onSubmit){
+  const f = $('#dlgForm');
+  f.innerHTML = html + `<div class="btns"><button type="button" class="sec2" value="cancel" onclick="$('#dlg').close()">Cancelar</button><button value="ok" id="dlgOk">Salvar</button></div>`;
+  f.onsubmit = e => {
+    if(e.submitter && e.submitter.value!=='ok') return;
+    const r = onSubmit(new FormData(f));
+    if(r===false){ e.preventDefault(); return; }
+    save(); render();
+  };
+  $('#dlg').showModal();
+  setTimeout(()=>f.querySelector('input:not([type=hidden])')?.focus(),50);
+}
+function confirmBox(msg, okText, fn){
+  const f = $('#dlgForm');
+  f.innerHTML = `<h2>${msg}</h2><div class="btns"><button type="button" class="sec2" onclick="$('#dlg').close()">Cancelar</button><button class="red" value="ok">${okText}</button></div>`;
+  f.onsubmit = e => { if(e.submitter?.value==='ok'){ fn(); save(); render(); } };
+  $('#dlg').showModal();
+}
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('on'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('on'),2200); }
+
+/* ============ JEJUNS ============ */
+const FAST_IDEAS = ['🍬 Doce','🥤 Refrigerante','📱 Redes sociais','🍔 Fast food','☕ Café','🍺 Álcool','🎮 Jogos'];
+function newFast(){
+  dialog(`<h2>Novo jejum</h2>
+    <label>Do que você vai jejuar?</label>
+    <input name="name" required placeholder="Ex.: Doce" maxlength="40">
+    <div class="chips">${FAST_IDEAS.map(i=>`<button type="button" onclick="this.form.name.value='${i.split(' ').slice(1).join(' ')}';this.form.icon.value='${i.split(' ')[0]}'">${i}</button>`).join('')}</div>
+    <input type="hidden" name="icon" value="⏳">
+    <label>Começou quando?</label>
+    <input type="datetime-local" name="start" value="${toLocalInput(Date.now())}">`,
+  fd=>{
+    const start = new Date(fd.get('start')).getTime() || Date.now();
+    D.fasts.unshift({id:uid(), name:fd.get('name').trim(), icon:fd.get('icon')||'⏳', startedAt: Math.min(start,Date.now()), history:[]});
+    toast('Jejum iniciado. Força! 💪');
+  });
+}
+const fastBest = f => f.history.reduce((m,h)=>Math.max(m,h.end-h.start),0);
+function startFast(id){ const f=D.fasts.find(x=>x.id===id); f.startedAt=Date.now(); save(); render(); toast('Contagem reiniciada 💪'); }
+function breakFast(id){
+  const f = D.fasts.find(x=>x.id===id);
+  dialog(`<h2>Quebrou o jejum de ${esc(f.name)}?</h2>
+    <p class="mut">Sem problema — o tempo fica registrado e vira sua meta para bater.</p>
+    <label>Quando?</label>
+    <input type="datetime-local" name="end" value="${toLocalInput(Date.now())}">
+    <label>Observação (opcional)</label>
+    <input name="note" placeholder="Ex.: aniversário da família" maxlength="80">
+    <label><input type="checkbox" name="restart" checked style="width:auto;margin-right:6px">Recomeçar a contagem logo em seguida</label>`,
+  fd=>{
+    let end = new Date(fd.get('end')).getTime() || Date.now();
+    end = Math.min(Math.max(end, f.startedAt), Date.now());
+    const best = fastBest(f), len = end - f.startedAt;
+    f.history.unshift({start:f.startedAt, end, note:fd.get('note')||''});
+    f.startedAt = fd.get('restart') ? Date.now() : null;
+    toast(len>best && f.history.length>1 ? `🏆 Novo recorde: ${dur(len)}!` : `Registrado: ${dur(len)}`);
+  });
+}
+function delFast(id){ confirmBox('Excluir este jejum e todo o histórico?','Excluir',()=>{ D.fasts=D.fasts.filter(f=>f.id!==id); }); }
+function delFastHist(id,i){ confirmBox('Apagar este registro?','Apagar',()=>{ D.fasts.find(f=>f.id===id).history.splice(i,1); }); }
+
+function renderFasts(){
+  const el = $('#s-jejum');
+  if(!D.fasts.length){ el.innerHTML = `<div class="card empty"><div>⏳</div>Nenhum jejum ainda.<br>Toque em <b>+</b> para começar (ex.: jejum de doce).</div>`; return; }
+  el.innerHTML = D.fasts.map(f=>{
+    const best = fastBest(f);
+    const cur = f.startedAt ? Date.now()-f.startedAt : 0;
+    const record = Math.max(best,cur);
+    const p = parts(cur);
+    const pct = best ? Math.min(100, cur/best*100) : 100;
+    const beating = f.startedAt && best && cur>best;
+    const total = f.history.length;
+    return `<div class="card">
+      <div class="row"><div class="icon">${f.icon||'⏳'}</div>
+        <div class="sp"><h2>${esc(f.name)}</h2>
+        <div class="mut">${f.startedAt?'desde '+fmtDateTime(f.startedAt):'pausado'}</div></div>
+        ${f.startedAt?(beating?'<span class="badge rec">🏆 recorde!</span>':'<span class="badge live">● ativo</span>'):''}
+      </div>
+      ${f.startedAt?`
+        <div class="big" data-live="${f.id}">${p.d}<small>d</small>${p.h}<small>h</small>${pad(p.m)}<small>m</small>${pad(p.s)}<small>s</small></div>
+        ${best?`<div class="bar ${beating?'g':''}"><i style="width:${pct}%"></i></div>
+        <div class="mut" data-goal="${f.id}">${beating?`Você já passou seu recorde em ${dur(cur-best)} 🔥`:`Faltam ${dur(best-cur)} para bater seu recorde (${dur(best)})`}</div>`
+        :`<div class="mut">Primeira tentativa — esse tempo vai virar sua meta.</div>`}
+        <button class="red full" onclick="breakFast('${f.id}')">Quebrei o jejum</button>`
+      :`<button class="full" onclick="startFast('${f.id}')">▶ Começar de novo</button>`}
+      <div class="stats">
+        <div class="stat"><b>${record?dur(record):'—'}</b><span>maior jejum</span></div>
+        <div class="stat"><b>${total?dur(f.history.reduce((a,h)=>a+h.end-h.start,0)/total):'—'}</b><span>média</span></div>
+        <div class="stat"><b>${total}</b><span>quebras</span></div>
+      </div>
+      ${total?`<h3>Histórico</h3><ul class="list">${f.history.slice(0,10).map((h,i)=>`<li>
+        <span>${h.end-h.start===best?'🏆':'•'}</span>
+        <div class="sp"><b>${dur(h.end-h.start)}</b> <span class="mut">${fmtDate(h.start)} → ${fmtDate(h.end)}</span>${h.note?`<div class="mut">${esc(h.note)}</div>`:''}</div>
+        <button class="ghost" onclick="delFastHist('${f.id}',${i})">✕</button></li>`).join('')}</ul>`:''}
+      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="delFast('${f.id}')">Excluir jejum</button></div>
+    </div>`;
+  }).join('');
+}
+setInterval(()=>{
+  if(tab!=='jejum' || $('#dlg').open) return;
+  document.querySelectorAll('[data-live]').forEach(el=>{
+    const f = D.fasts.find(x=>x.id===el.dataset.live); if(!f||!f.startedAt) return;
+    const p = parts(Date.now()-f.startedAt);
+    el.innerHTML = `${p.d}<small>d</small>${p.h}<small>h</small>${pad(p.m)}<small>m</small>${pad(p.s)}<small>s</small>`;
+  });
+  if(new Date().getSeconds()===0) renderFasts();
+},1000);
+
+/* ============ LIVROS ============ */
+const year = () => new Date().getFullYear();
+function newBook(){
+  dialog(`<h2>Adicionar livro</h2>
+    <label>Título</label><input name="title" required maxlength="80">
+    <label>Autor (opcional)</label><input name="author" maxlength="60">
+    <label>Status</label>
+    <select name="status"><option value="lendo">Estou lendo</option><option value="lido">Já terminei</option><option value="quero">Quero ler</option></select>
+    <label>Data em que terminou (se já leu)</label><input type="date" name="end" value="${todayKey()}">`,
+  fd=>{
+    const st = fd.get('status');
+    D.books.unshift({id:uid(), title:fd.get('title').trim(), author:fd.get('author').trim(), status:st,
+      start: st==='quero'?null:Date.now(), end: st==='lido' ? keyToDate(fd.get('end')||todayKey()).getTime() : null});
+    toast(st==='lido'?'Mais um! 📖':'Livro adicionado');
+  });
+}
+function finishBook(id){ const b=D.books.find(x=>x.id===id); b.status='lido'; b.end=Date.now(); save(); render(); toast('Parabéns, livro concluído! 🎉'); }
+function startBook(id){ const b=D.books.find(x=>x.id===id); b.status='lendo'; b.start=Date.now(); save(); render(); }
+function delBook(id){ confirmBox('Remover este livro?','Remover',()=>{ D.books=D.books.filter(b=>b.id!==id); }); }
+function setGoal(){
+  const y = year();
+  dialog(`<h2>Meta de ${y}</h2><label>Quantos livros quer ler este ano?</label>
+    <input type="number" name="g" min="1" max="365" value="${D.goals[y]||12}" required>`,
+  fd=>{ D.goals[y] = Number(fd.get('g')); });
+}
+function renderBooks(){
+  const y = year(), goal = D.goals[y];
+  const read = D.books.filter(b=>b.status==='lido');
+  const thisYear = read.filter(b=>new Date(b.end).getFullYear()===y);
+  const byYear = {}; read.forEach(b=>{const k=new Date(b.end).getFullYear(); byYear[k]=(byYear[k]||0)+1;});
+  const bestYear = Object.entries(byYear).sort((a,b)=>b[1]-a[1])[0];
+  const reading = D.books.filter(b=>b.status==='lendo');
+  const want = D.books.filter(b=>b.status==='quero');
+  // ritmo esperado
+  const now = new Date(), startY = new Date(y,0,1), endY = new Date(y+1,0,1);
+  const expected = goal ? goal*(now-startY)/(endY-startY) : 0;
+  const diff = thisYear.length - expected;
+
+  $('#s-livros').innerHTML = `
+  <div class="card">
+    <div class="row"><div class="icon">🎯</div><div class="sp"><h2>Meta de ${y}</h2>
+      <div class="mut">${goal?`${goal} livros`:'Defina quantos livros quer ler'}</div></div>
+      <button class="sec2" onclick="setGoal()">${goal?'Editar':'Definir'}</button></div>
+    <div class="big">${thisYear.length}<small>${goal?'/ '+goal:'lidos'}</small></div>
+    ${goal?`<div class="bar g"><i style="width:${Math.min(100,thisYear.length/goal*100)}%"></i></div>
+      <div class="mut">${thisYear.length>=goal?'Meta batida! 🏆':(diff>=0?`Você está adiantado ✅`:`Para manter o ritmo, deveria estar em ${Math.ceil(expected)} 📖`)}</div>`:''}
+    <div class="stats">
+      <div class="stat"><b>${read.length}</b><span>lidos no total</span></div>
+      <div class="stat"><b>${bestYear?bestYear[1]:'—'}</b><span>recorde${bestYear?' ('+bestYear[0]+')':''}</span></div>
+      <div class="stat"><b>${reading.length}</b><span>lendo agora</span></div>
+    </div>
+  </div>
+  ${reading.length?`<div class="card"><h3 style="margin-top:0">Lendo agora</h3><ul class="list">${reading.map(b=>`<li>
+    <span>📖</span><div class="sp"><b>${esc(b.title)}</b>${b.author?`<div class="mut">${esc(b.author)}</div>`:''}<div class="mut">há ${Math.floor((Date.now()-b.start)/864e5)} dias</div></div>
+    <button class="green" style="padding:8px 12px" onclick="finishBook('${b.id}')">Terminei</button>
+    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
+  ${read.length?`<div class="card"><h3 style="margin-top:0">Lidos</h3><ul class="list">${read.sort((a,b)=>b.end-a.end).map(b=>`<li>
+    <span>✅</span><div class="sp"><b>${esc(b.title)}</b><div class="mut">${b.author?esc(b.author)+' · ':''}${fmtDate(b.end)}</div></div>
+    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
+  ${want.length?`<div class="card"><h3 style="margin-top:0">Quero ler</h3><ul class="list">${want.map(b=>`<li>
+    <span>🔖</span><div class="sp"><b>${esc(b.title)}</b>${b.author?`<div class="mut">${esc(b.author)}</div>`:''}</div>
+    <button class="sec2" style="padding:8px 12px" onclick="startBook('${b.id}')">Começar</button>
+    <button class="ghost" onclick="delBook('${b.id}')">✕</button></li>`).join('')}</ul></div>`:''}
+  ${!D.books.length?`<div class="card empty"><div>📚</div>Toque em <b>+</b> para adicionar um livro.</div>`:''}`;
+}
+
+/* ============ SEQUÊNCIAS (hábitos) ============ */
+const HABIT_IDEAS = ['🙏 Oração','📖 Leitura bíblica','🏃 Exercício','💧 Beber água','📵 Sem celular à noite','✍️ Devocional'];
+function newHabit(){
+  dialog(`<h2>Nova sequência</h2>
+    <label>Hábito diário</label><input name="name" required placeholder="Ex.: Oração" maxlength="40">
+    <div class="chips">${HABIT_IDEAS.map(i=>`<button type="button" onclick="this.form.name.value='${i.split(' ').slice(1).join(' ')}';this.form.icon.value='${i.split(' ')[0]}'">${i}</button>`).join('')}</div>
+    <input type="hidden" name="icon" value="⭐">`,
+  fd=>{ D.habits.push({id:uid(), name:fd.get('name').trim(), icon:fd.get('icon')||'⭐', days:[]}); });
+}
+function streaks(days){
+  const set = new Set(days), t = todayKey();
+  // atual: conta a partir de hoje (ou ontem, se hoje ainda não marcou)
+  let k = set.has(t) ? t : addDays(t,-1), cur = 0;
+  while(set.has(k)){ cur++; k = addDays(k,-1); }
+  // melhor
+  let best = 0, run = 0, prev = null;
+  [...set].sort().forEach(d=>{ run = (prev && addDays(prev,1)===d) ? run+1 : 1; best=Math.max(best,run); prev=d; });
+  return {cur, best, total:set.size, doneToday:set.has(t)};
+}
+function toggleDay(id,k){
+  if(k>todayKey()) return;
+  const h = D.habits.find(x=>x.id===id), i = h.days.indexOf(k);
+  if(i>=0) h.days.splice(i,1); else h.days.push(k);
+  const s = streaks(h.days);
+  save(); render();
+  if(i<0 && k===todayKey()) toast(s.cur>1 && s.cur===s.best ? `🏆 Recorde: ${s.cur} dias seguidos!` : `${s.cur} ${s.cur===1?'dia':'dias'} seguidos 🔥`);
+}
+function delHabit(id){ confirmBox('Excluir esta sequência?','Excluir',()=>{ D.habits=D.habits.filter(h=>h.id!==id); }); }
+function renderHabits(){
+  const el = $('#s-habitos');
+  if(!D.habits.length){ el.innerHTML = `<div class="card empty"><div>🙏</div>Toque em <b>+</b> para criar uma sequência<br>(ex.: dias seguidos de oração).</div>`; return; }
+  const t = todayKey();
+  // últimas 5 semanas, alinhadas para terminar no sábado da semana atual
+  const end = addDays(t, 6 - keyToDate(t).getDay());
+  const cells = Array.from({length:35},(_,i)=>addDays(end, i-34));
+  el.innerHTML = D.habits.map(h=>{
+    const s = streaks(h.days), set = new Set(h.days);
+    const pct = s.best ? Math.min(100, s.cur/s.best*100) : 0;
+    return `<div class="card">
+      <div class="row"><div class="icon">${h.icon}</div>
+        <div class="sp"><h2>${esc(h.name)}</h2><div class="mut">${s.doneToday?'Feito hoje ✓':'Ainda não marcado hoje'}</div></div>
+        ${s.cur && s.cur===s.best && s.best>1?'<span class="badge rec">🏆 recorde</span>':''}</div>
+      <div class="big">${s.cur}<small>${s.cur===1?'dia seguido':'dias seguidos'}</small></div>
+      ${s.best?`<div class="bar g"><i style="width:${pct}%"></i></div>
+      <div class="mut">${s.cur>=s.best?'Você está no seu recorde 🔥':`Faltam ${s.best-s.cur+1} dias para bater seu recorde (${s.best})`}</div>`:''}
+      <button class="full ${s.doneToday?'done':'green'}" onclick="toggleDay('${h.id}','${t}')">${s.doneToday?'✓ Feito hoje (toque para desfazer)':'Marcar hoje'}</button>
+      <div class="stats">
+        <div class="stat"><b>${s.cur}</b><span>atual</span></div>
+        <div class="stat"><b>${s.best}</b><span>recorde</span></div>
+        <div class="stat"><b>${s.total}</b><span>dias no total</span></div>
+      </div>
+      <h3>Últimas semanas <span style="text-transform:none;letter-spacing:0;font-weight:400">· toque num dia para marcar/desmarcar</span></h3>
+      <div class="grid">${['D','S','T','Q','Q','S','S'].map(d=>`<div style="background:none;cursor:default">${d}</div>`).join('')}
+        ${cells.map(k=>`<div class="${set.has(k)?'on':''} ${k===t?'today':''} ${k>t?'fut':''}" onclick="toggleDay('${h.id}','${k}')">${Number(k.slice(8))}</div>`).join('')}</div>
+      <div style="text-align:right;margin-top:8px"><button class="ghost" onclick="delHabit('${h.id}')">Excluir</button></div>
+    </div>`;
+  }).join('');
+}
+
+/* ============ BACKUP ============ */
+function renderConfig(){
+  $('#s-config').innerHTML = `
+  <div class="card"><h2>Seus dados</h2>
+    <p class="mut">Tudo fica salvo só neste navegador/aparelho. Se trocar de celular ou limpar o navegador, os dados somem — então faça backup de vez em quando.</p>
+    <div class="stats">
+      <div class="stat"><b>${D.fasts.length}</b><span>jejuns</span></div>
+      <div class="stat"><b>${D.books.length}</b><span>livros</span></div>
+      <div class="stat"><b>${D.habits.length}</b><span>sequências</span></div>
+    </div>
+    <button class="full" onclick="exportData()">⬇ Baixar backup (.json)</button>
+    <button class="full sec2" onclick="$('#imp').click()">⬆ Restaurar backup</button>
+    <input type="file" id="imp" accept=".json,application/json" style="display:none" onchange="importData(this)">
+  </div>
+  <div class="card"><h2>Dica</h2>
+    <p class="mut">No celular, abra o menu do navegador e toque em <b>“Adicionar à tela inicial”</b>. O app fica com ícone, igual a um aplicativo.</p>
+  </div>
+  <div class="card"><button class="ghost" style="color:var(--red)" onclick="confirmBox('Apagar TODOS os dados?','Apagar tudo',()=>{D={fasts:[],books:[],goals:{},habits:[]};})">Apagar todos os dados</button></div>`;
+}
+function exportData(){
+  const blob = new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `minhas-metas-${todayKey()}.json`; a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(inp){
+  const file = inp.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!Array.isArray(d.fasts)||!Array.isArray(d.habits)||!Array.isArray(d.books)) throw 0;
+      D = {fasts:d.fasts, books:d.books, goals:d.goals||{}, habits:d.habits}; save(); render(); toast('Backup restaurado ✓');
+    }catch(e){ toast('Arquivo inválido'); }
+    inp.value='';
+  };
+  r.readAsText(file);
+}
+
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render(); });
+render();
+</script>
+</body>
+</html>
